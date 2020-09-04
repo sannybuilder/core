@@ -1,0 +1,6 @@
+    ; comment
+    100=Player
+
+ 200 =    Actor
+
+ acc
