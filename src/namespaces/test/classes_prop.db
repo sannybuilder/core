@@ -1,0 +1,22 @@
+
+
+
+
+#classeslist
+
+test
+
+#Classes
+
+
+$Test
+$BEGIN
+
+^Health,[0223,=,1,0,0],[0226,=,2,0,0],("Actor%h")
+
+Method, 000A, 0, 100,("String Param%s")
+
+$END
+
+
+#eof

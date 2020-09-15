@@ -1,4 +1,4 @@
-mod dictionary_num_by_str;
-mod dictionary_str_by_num;
-mod dictionary_str_by_str;
-mod ffi;
+#![feature(never_type)]
+mod common_ffi;
+mod dictionary;
+mod namespaces;

@@ -1,6 +1,5 @@
-use crate::ffi;
-
-use ffi::{pchar_to_str, pchar_to_string, str_to_pchar, CaseFormat, Dict, Duplicates, PChar};
+use crate::common_ffi::*;
+use crate::dictionary::ffi::*;
 use std::ffi::CString;
 
 type DictNumByStr = Dict<CString, i32>;
@@ -15,14 +14,14 @@ pub extern "C" fn dictionary_num_by_str_new(
     delimiters: PChar,
     trim: bool,
 ) -> PDict {
-    Box::into_raw(Box::new(Dict::new(
+    ptr_new(Dict::new(
         duplicates.into(),
         CaseFormat::NoFormat,
         pchar_to_string(comments),
         pchar_to_string(delimiters),
         trim,
         hex_keys,
-    )))
+    ))
 }
 
 #[no_mangle]
@@ -75,10 +74,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_get_count(dict: &DictNumByStr) ->
 
 #[no_mangle]
 pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: PDictMut) {
-    if ptr.is_null() {
-        return;
-    }
-    Box::from_raw(ptr);
+    ptr_free(ptr);
 }
 
 #[cfg(test)]

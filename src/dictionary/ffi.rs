@@ -1,11 +1,8 @@
 #![cfg(windows)]
 
 extern crate libc;
-use libc::c_char;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-
-pub type PChar = *const c_char;
+use std::ffi::CString;
 
 pub struct Dict<T, U> {
     pub map: HashMap<T, U>,
@@ -141,8 +138,8 @@ impl KeyValue for (CString, i32) {
 
 fn apply_format(s: &str, case_format: &CaseFormat) -> Result<CString, std::ffi::NulError> {
     let value = match case_format {
-        CaseFormat::LowerCase => s.to_lowercase(),
-        CaseFormat::UpperCase => s.to_uppercase(),
+        CaseFormat::LowerCase => s.to_ascii_lowercase(),
+        CaseFormat::UpperCase => s.to_ascii_uppercase(),
         CaseFormat::NoFormat => String::from(s),
     };
     CString::new(value)
@@ -184,28 +181,4 @@ impl From<u8> for CaseFormat {
             _ => CaseFormat::NoFormat,
         }
     }
-}
-
-pub fn pchar_to_string<'a>(s: PChar) -> String {
-    unsafe { String::from(CStr::from_ptr(s).to_str().unwrap()) }
-}
-
-pub fn pchar_to_str<'a>(s: PChar) -> &'a str {
-    unsafe { CStr::from_ptr(s).to_str().unwrap() }
-}
-
-pub fn string_to_pchar(s: String) -> PChar {
-    CString::new(s).unwrap().into_raw()
-}
-
-pub fn str_to_pchar(s: &str) -> PChar {
-    CString::new(s).unwrap().into_raw()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn str_free(s: *mut c_char) {
-    if s.is_null() {
-        return;
-    }
-    CString::from_raw(s);
 }

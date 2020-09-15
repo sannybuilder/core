@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libc = "0.2.76"
+nom = "5.1.2"
