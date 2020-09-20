@@ -6,6 +6,7 @@ use nom::character::complete::space0;
 use nom::combinator::all_consuming;
 use nom::combinator::map_res;
 use nom::combinator::opt;
+use nom::combinator::peek;
 use nom::multi::many0;
 use nom::sequence::delimited;
 use nom::sequence::tuple;
@@ -22,11 +23,11 @@ pub fn hint(input: &str) -> IResult<&str, String> {
                         char('"'),
                         map_res(
                             tuple((
-                                opt(is_not("%^")),
-                                opt(alt((hint_plain_param, hint_enum_param))),
+                                opt(is_not("%:")),
+                                opt(alt((hint_fixed_type, hint_arbitrary_type))),
                             )),
                             |(name, t)| -> Result<String, !> {
-                                let name = name.unwrap_or("_"); // empty param name
+                                let name = name.unwrap_or("_"); // empty param name is allowed
                                 match t {
                                     Some(t) => Ok(format!("{}: {}", name, t)),
                                     None => Ok(String::from(name)),
@@ -45,7 +46,7 @@ pub fn hint(input: &str) -> IResult<&str, String> {
     )(input)
 }
 
-pub fn hint_plain_param(input: &str) -> IResult<&str, &str> {
+pub fn hint_fixed_type(input: &str) -> IResult<&str, &str> {
     map_res(
         tuple((char('%'), is_not("\""))),
         |(_, param_type)| -> Result<&str, !> {
@@ -62,10 +63,18 @@ pub fn hint_plain_param(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
-pub fn hint_enum_param(input: &str) -> IResult<&str, &str> {
-    map_res(tuple((char('^'), is_not("\""))), |_| -> Result<&str, !> {
-        Ok("Extended")
-    })(input)
+pub fn hint_arbitrary_type(input: &str) -> IResult<&str, &str> {
+    map_res(
+        tuple((char(':'), space0, alt((hint_enum_type, is_not("\""))))),
+        |(_, _, p)| -> Result<&str, !> { Ok(p) },
+    )(input)
+}
+
+pub fn hint_enum_type(input: &str) -> IResult<&str, &str> {
+    map_res(
+        tuple((peek(char('^')), is_not("\""))),
+        |(_, h)| -> Result<&str, !> { Ok(h) },
+    )(input)
 }
 
 pub fn property(

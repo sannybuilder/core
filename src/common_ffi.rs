@@ -36,6 +36,6 @@ pub unsafe fn ptr_free<T>(ptr: *mut T) {
     Box::from_raw(ptr);
 }
 
-pub fn ptr_new<T>(o: T) -> *const T {
+pub fn ptr_new<T>(o: T) -> *mut T {
     Box::into_raw(Box::new(o))
 }

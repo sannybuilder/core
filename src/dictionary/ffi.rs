@@ -167,6 +167,15 @@ impl From<u8> for Duplicates {
     }
 }
 
+impl Into<u8> for Duplicates {
+    fn into(self) -> u8 {
+        match self {
+            Duplicates::Ignore => 0,
+            Duplicates::Replace => 1,
+        }
+    }
+}
+
 pub enum CaseFormat {
     NoFormat,
     UpperCase,
@@ -179,6 +188,16 @@ impl From<u8> for CaseFormat {
             1 => CaseFormat::LowerCase,
             2 => CaseFormat::UpperCase,
             _ => CaseFormat::NoFormat,
+        }
+    }
+}
+
+impl Into<u8> for CaseFormat {
+    fn into(self) -> u8 {
+        match self {
+            CaseFormat::NoFormat => 0,
+            CaseFormat::LowerCase => 1,
+            CaseFormat::UpperCase => 2,
         }
     }
 }

@@ -3,8 +3,6 @@ use crate::dictionary::ffi::*;
 use std::ffi::CString;
 
 type DictNumByStr = Dict<CString, i32>;
-type PDict = *const DictNumByStr;
-type PDictMut = *mut DictNumByStr;
 
 #[no_mangle]
 pub extern "C" fn dictionary_num_by_str_new(
@@ -13,7 +11,7 @@ pub extern "C" fn dictionary_num_by_str_new(
     comments: PChar,
     delimiters: PChar,
     trim: bool,
-) -> PDict {
+) -> *mut DictNumByStr {
     ptr_new(Dict::new(
         duplicates.into(),
         CaseFormat::NoFormat,
@@ -26,25 +24,11 @@ pub extern "C" fn dictionary_num_by_str_new(
 
 #[no_mangle]
 pub unsafe extern "C" fn dictionary_num_by_str_load_file(
-    dict: &mut DictNumByStr,
+    dict: *mut DictNumByStr,
     file_name: PChar,
 ) -> bool {
-    if let Ok(_) = dict.load_file(pchar_to_str(file_name)) {
-        true
-    } else {
-        false
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn dictionary_num_by_str_find(
-    dict: &DictNumByStr,
-    name: PChar,
-    out: *mut i32,
-) -> bool {
-    if let Ok(name) = CString::new(pchar_to_str(name)) {
-        if let Some(val) = dict.map.get(&name) {
-            *out = *val;
+    if let Some(ptr) = dict.as_mut() {
+        if let Ok(_) = ptr.load_file(pchar_to_str(file_name)) {
             return true;
         }
     }
@@ -52,28 +36,49 @@ pub unsafe extern "C" fn dictionary_num_by_str_find(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dictionary_num_by_str_find(
+    dict: *mut DictNumByStr,
+    name: PChar,
+    out: *mut i32,
+) -> bool {
+    if let Some(ptr) = dict.as_mut() {
+        if let Ok(name) = CString::new(pchar_to_str(name)) {
+            if let Some(val) = ptr.map.get(&name) {
+                *out = *val;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dictionary_num_by_str_get_entry(
-    dict: &DictNumByStr,
+    dict: *mut DictNumByStr,
     index: usize,
     out_key: *mut PChar,
     out_value: *mut i32,
 ) -> bool {
-    if let Some((key, &value)) = dict.map.iter().nth(index) {
-        *out_value = value;
-        *out_key = key.as_ptr();
-        true
-    } else {
-        false
+    if let Some(ptr) = dict.as_mut() {
+        if let Some((key, &value)) = ptr.map.iter().nth(index) {
+            *out_value = value;
+            *out_key = key.as_ptr();
+            return true;
+        }
     }
+    return false;
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dictionary_num_by_str_get_count(dict: &DictNumByStr) -> usize {
-    dict.map.len()
+pub unsafe extern "C" fn dictionary_num_by_str_get_count(dict: *mut DictNumByStr) -> usize {
+    if let Some(ptr) = dict.as_mut() {
+        return ptr.map.len();
+    }
+    return 0;
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: PDictMut) {
+pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: *mut DictNumByStr) {
     ptr_free(ptr);
 }
 
@@ -83,116 +88,105 @@ mod tests {
 
     #[test]
     fn test_dictionary_num_by_str_get_count() {
-        let mut f = Dict::new(
-            Duplicates::Replace,
-            CaseFormat::NoFormat,
-            String::from(";"),
-            String::from(",="),
-            true,
-            false,
-        );
-        let content = f.load_file("src/test/keywords.txt");
-        assert!(content.is_ok(), content.unwrap_err());
-
         unsafe {
-            assert_eq!(dictionary_num_by_str_get_count(&f), 2);
+            let f = dictionary_num_by_str_new(
+                Duplicates::Replace.into(),
+                false,
+                str_to_pchar(";"),
+                str_to_pchar(",="),
+                true,
+            );
+
+            assert!(f.as_mut().is_some());
+            let loaded = dictionary_num_by_str_load_file(
+                f,
+                str_to_pchar("src/dictionary/test/keywords.txt"),
+            );
+            assert!(loaded);
+            assert_eq!(dictionary_num_by_str_get_count(f), 2);
         }
     }
 
     #[test]
     fn test_dictionary_num_by_str_find() {
-        let mut f = Dict::new(
-            Duplicates::Replace,
-            CaseFormat::NoFormat,
-            String::from(";"),
-            String::from(",="),
-            true,
-            true,
-        );
-        let content = f.load_file("src/test/keywords-hex.txt");
-        assert!(content.is_ok(), content.unwrap_err());
-
         unsafe {
-            assert_eq!(dictionary_num_by_str_get_count(&f), 23);
+            let f = dictionary_num_by_str_new(
+                Duplicates::Replace.into(),
+                true,
+                str_to_pchar(";"),
+                str_to_pchar(",="),
+                true,
+            );
+            assert!(f.as_mut().is_some());
 
-            let mut i: i32 = 0;
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("wait"), &mut i));
+            let loaded = dictionary_num_by_str_load_file(
+                f,
+                str_to_pchar("src/dictionary/test/keywords-hex.txt"),
+            );
+            assert!(loaded);
+
+            assert_eq!(dictionary_num_by_str_get_count(f), 23);
+            let mut i = 0;
+            assert!(dictionary_num_by_str_find(f, str_to_pchar("wait"), &mut i));
             assert_eq!(i, 1);
             i = -1;
-            assert!(!dictionary_num_by_str_find(&f, str_to_pchar(""), &mut i));
-            assert_eq!(i, -1);
-        }
-    }
-
-    #[test]
-    fn test_dictionary_num_by_str_find_in_uppercase() {
-        let mut f = Dict::new(
-            Duplicates::Replace,
-            CaseFormat::UpperCase,
-            String::from(";"),
-            String::from(",="),
-            true,
-            true,
-        );
-        let content = f.load_file("src/test/keywords-hex.txt");
-        assert!(content.is_ok(), content.unwrap_err());
-
-        unsafe {
-            assert_eq!(dictionary_num_by_str_get_count(&f), 23);
-
-            let mut i: i32 = 0;
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("WAIT"), &mut i));
-            assert_eq!(i, 1);
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("JUMP"), &mut i));
-            assert_eq!(i, 2);
-            i = -1;
-            assert!(!dictionary_num_by_str_find(&f, str_to_pchar(""), &mut i));
+            assert!(!dictionary_num_by_str_find(f, str_to_pchar(""), &mut i));
             assert_eq!(i, -1);
         }
     }
 
     #[test]
     fn test_dictionary_num_by_str_duplicates_ignore() {
-        let mut f = Dict::new(
-            Duplicates::Ignore,
-            CaseFormat::NoFormat,
-            String::from(";"),
-            String::from(",="),
-            true,
-            true,
-        );
-        let content = f.load_file("src/test/keywords-dups.txt");
-        assert!(content.is_ok(), content.unwrap_err());
         unsafe {
-            assert_eq!(dictionary_num_by_str_get_count(&f), 2);
+            let f = dictionary_num_by_str_new(
+                Duplicates::Ignore.into(),
+                true,
+                str_to_pchar(";"),
+                str_to_pchar(",="),
+                true,
+            );
+            assert!(f.as_mut().is_some());
 
-            let mut i: i32 = 0;
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("wait"), &mut i));
+            let loaded = dictionary_num_by_str_load_file(
+                f,
+                str_to_pchar("src/dictionary/test/keywords-dups.txt"),
+            );
+            assert!(loaded);
+
+            assert_eq!(dictionary_num_by_str_get_count(f), 2);
+
+            let mut i = 0;
+            assert!(dictionary_num_by_str_find(f, str_to_pchar("wait"), &mut i));
             assert_eq!(i, 1);
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("jump"), &mut i));
+            assert!(dictionary_num_by_str_find(f, str_to_pchar("jump"), &mut i));
             assert_eq!(i, 1);
         }
     }
 
     #[test]
     fn test_dictionary_num_by_str_duplicates_replace() {
-        let mut f = Dict::new(
-            Duplicates::Replace,
-            CaseFormat::NoFormat,
-            String::from(";"),
-            String::from(",="),
-            true,
-            true,
-        );
-        let content = f.load_file("src/test/keywords-dups.txt");
-        assert!(content.is_ok(), content.unwrap_err());
         unsafe {
-            assert_eq!(dictionary_num_by_str_get_count(&f), 2);
+            let f = dictionary_num_by_str_new(
+                Duplicates::Replace.into(),
+                true,
+                str_to_pchar(";"),
+                str_to_pchar(",="),
+                true,
+            );
+            assert!(f.as_mut().is_some());
 
-            let mut i: i32 = 0;
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("wait"), &mut i));
+            let loaded = dictionary_num_by_str_load_file(
+                f,
+                str_to_pchar("src/dictionary/test/keywords-dups.txt"),
+            );
+            assert!(loaded);
+
+            assert_eq!(dictionary_num_by_str_get_count(f), 2);
+
+            let mut i = 0;
+            assert!(dictionary_num_by_str_find(f, str_to_pchar("wait"), &mut i));
             assert_eq!(i, 1);
-            assert!(dictionary_num_by_str_find(&f, str_to_pchar("jump"), &mut i));
+            assert!(dictionary_num_by_str_find(f, str_to_pchar("jump"), &mut i));
             assert_eq!(i, 2);
         }
     }

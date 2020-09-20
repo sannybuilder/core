@@ -111,7 +111,12 @@ impl Namespaces {
                                 .by_ref()
                                 .take_while(|line| !line.starts_with(|c| c == '#' || c == '$'))
                             {
-                                self.parse(line, name);
+                                match self.parse_method(line, name) {
+                                    Some(_) => {}
+                                    None => {
+                                        println!("Can't parse the line {}", line);
+                                    }
+                                }
                             }
                         }
                     }
@@ -122,7 +127,7 @@ impl Namespaces {
         Ok(())
     }
 
-    fn parse(&mut self, line: &str, class_name: &String) -> Option<()> {
+    fn parse_method(&mut self, line: &str, class_name: &String) -> Option<()> {
         if line.starts_with("^") {
             return self.parse_prop(line, class_name);
         }
@@ -182,5 +187,9 @@ impl Namespaces {
         self.opcodes.push(opcode);
         self.map_op_by_id.insert(id, index);
         self.map_op_by_name.insert(name_lower, index);
+    }
+
+    pub fn find_by_opcode(&mut self, opcode: u16) -> Option<&usize> {
+        self.map_op_by_id.get(&opcode)
     }
 }
