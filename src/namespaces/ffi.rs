@@ -10,7 +10,7 @@ pub extern "C" fn classes_new() -> *mut Namespaces {
 #[no_mangle]
 pub unsafe extern "C" fn classes_load_file(c: *mut Namespaces, file_name: PChar) -> bool {
     if let Some(p) = c.as_mut() {
-        if let Ok(_) = p.load_file(pchar_to_str(file_name)) {
+        if let Ok(_) = p.load_classes(pchar_to_str(file_name)) {
             return true;
         }
     };
@@ -40,12 +40,12 @@ pub unsafe extern "C" fn classes_free(ptr: *mut Namespaces) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use namespaces::OpcodeType;
+    use namespaces::{Member, OpcodeType};
 
     #[test]
     fn test1() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_one_class.db");
+        let content = f.load_classes("src/namespaces/test/classes_one_class.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
 
@@ -63,14 +63,14 @@ mod tests {
     #[test]
     fn test_classes_load() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_empty.db");
+        let content = f.load_classes("src/namespaces/test/classes_empty.db");
         assert!(content.is_ok(), content.unwrap_err());
     }
 
     #[test]
     fn test_only_classes() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_only_classes.db");
+        let content = f.load_classes("src/namespaces/test/classes_only_classes.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 2);
     }
@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn test_one_ignore_class() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_one_ignore_class.db");
+        let content = f.load_classes("src/namespaces/test/classes_one_ignore_class.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
     }
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn test_prop() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_prop.db");
+        let content = f.load_classes("src/namespaces/test/classes_prop.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
     }
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_invalid() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_invalid.db");
+        let content = f.load_classes("src/namespaces/test/classes_invalid.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
         assert_eq!(f.opcodes.len(), 0);
@@ -103,26 +103,36 @@ mod tests {
     #[test]
     fn test_many() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_many.db");
+        let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 28);
-        assert_eq!(f.opcodes.len(), 847); //wrong
+        assert_eq!(f.opcodes.len(), 944); //wrong
     }
 
     #[test]
     fn test_hint_enum() {
         let mut f = Namespaces::new();
-        let content = f.load_file("src/namespaces/test/classes_prop_hint.db");
+        let content = f.load_classes("src/namespaces/test/classes_prop_hint.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
-        assert_eq!(f.opcodes.len(), 2);
+        assert_eq!(f.opcodes.len(), 4);
 
         let op = f.opcodes.get(0).unwrap();
+        assert_eq!(op.hint, "p: Integer; Value: Extended");
 
-        assert_eq!(op.hint, "Value: ^A^B");
+        assert_eq!(f.map.len(), 3);
+        assert_int_enum(f.map.get("test.Method.1.A"), 0);
+        assert_int_enum(f.map.get("test.Method.1.B"), 10);
+        assert_int_enum(f.map.get("test.Method.1.C"), 11);
 
         let op = f.opcodes.get(1).unwrap();
         assert_eq!(op.hint, "Value: Type");
+
+        let op = f.opcodes.get(2).unwrap();
+        assert_eq!(op.hint, "Value: Unknown");
+
+        let op = f.opcodes.get(3).unwrap();
+        assert_eq!(op.hint, "_: boolean");
     }
 
     #[test]
@@ -142,6 +152,13 @@ mod tests {
             assert!(found);
             assert_eq!(index, 1);
             classes_free(f);
+        }
+    }
+
+    fn assert_int_enum(e: Option<&Member>, val: i32) {
+        match e {
+            Some(Member::int(x)) => assert_eq!(*x, val),
+            _ => assert!(false),
         }
     }
 }

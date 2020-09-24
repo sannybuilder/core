@@ -9,8 +9,10 @@ test
 $Test
 $BEGIN
 
-Method, 000A, 0, 100,("Value: ^A^B")
+Method, 000A, 0, 100,("p:Integer" "Value: ^A^B=10^C")
 Method2, 000B, 0, 100,("Value:     Type")
+Method3, 000B, 0, 100,("Value")
+Method4, 000B, 0, 100,(":boolean")
 
 $END
 
