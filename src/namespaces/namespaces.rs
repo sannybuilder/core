@@ -183,11 +183,11 @@ impl Namespaces {
         hint_params: &Vec<namespaces::parser::Param>,
         full_name: &String,
     ) -> String {
-        for (i, hint_param) in hint_params.iter().enumerate() {
-            match &hint_param._type {
-                HintParam::Text(_) => {
-                    continue;
-                }
+        hint_params
+            .iter()
+            .enumerate()
+            .map(|(i, hint_param)| match &hint_param._type {
+                HintParam::Text(_type) => format!("{}: {}", hint_param.name, _type),
                 HintParam::Enum(enum_values) => {
                     let mut index = 0;
                     for (key, val) in enum_values {
@@ -204,20 +204,9 @@ impl Namespaces {
                         index += 1;
                         self.map.insert(format!("{}.{}.{}", full_name, i, key), val);
                     }
+
+                    format!("{}: Extended", hint_param.name)
                 }
-            }
-        }
-        hint_params
-            .iter()
-            .map(|hint_param| {
-                format!(
-                    "{}: {}",
-                    hint_param.name,
-                    match &hint_param._type {
-                        HintParam::Text(s) => s,
-                        HintParam::Enum(_) => "Extended",
-                    }
-                )
             })
             .collect::<Vec<_>>()
             .join("; ")
