@@ -1,0 +1,19 @@
+
+#classeslist
+
+Test
+
+#Classes
+
+
+$Test
+$BEGIN
+
+^Health,[0223,=,1,0,0],[0226,=,2,0,0],("pedtype:^PedType0^PedType1^PedType10=10^PedType11")
+
+Method, 000A, 0, 100,("Enum:^Value1^Value2")
+
+$END
+
+
+#eof

@@ -24,7 +24,7 @@ pub unsafe extern "C" fn classes_find_by_opcode(
     index: *mut i32,
 ) -> bool {
     if let Some(p) = c.as_mut() {
-        if let Some(&i) = p.find_by_opcode(opcode) {
+        if let Some(&i) = p.get_opcode_index_by_opcode(opcode) {
             *index = i as i32;
             return true;
         }
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn classes_free(ptr: *mut Namespaces) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use namespaces::{Member, OpcodeType};
+    use namespaces::{EnumMember, OpcodeType};
 
     #[test]
     fn test1() {
@@ -57,7 +57,15 @@ mod tests {
         assert_eq!(op.id, 1);
         assert!(matches!(op.r#type, OpcodeType::Method));
         assert_eq!(op.help_code, 0);
-        assert_eq!(op.hint, "p: Boolean");
+        assert_eq!(String::from(op.params.get(0).unwrap()), "p: Boolean");
+
+        let op = f.get_opcode_by_index(0).unwrap();
+        assert_eq!(op.name, "TEST.m");
+
+        let op_index = f.get_opcode_index_by_opcode(1);
+        assert_eq!(op_index, Some(&0));
+
+        assert!(f.get_class_method_index_by_name("TEST", "M").is_some());
     }
 
     #[test]
@@ -89,6 +97,16 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_prop.db");
         assert!(content.is_ok(), content.unwrap_err());
         assert_eq!(f.names.len(), 1);
+        assert_eq!(f.opcodes.len(), 3);
+        let op_index = f.get_opcode_index_by_opcode(0x0226).unwrap();
+        let op = f.get_opcode_by_index(*op_index).unwrap();
+        assert_eq!(op.name, "test.Health");
+
+        let op_index = f
+            .get_class_property_index_by_name("TEST", "HEALTH", 2, "=")
+            .unwrap();
+        let op = f.get_opcode_by_index(*op_index).unwrap();
+        assert_eq!(op.id, 0x0226);
     }
 
     #[test]
@@ -110,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hint_enum() {
+    fn test_enum() {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_prop_hint.db");
         assert!(content.is_ok(), content.unwrap_err());
@@ -118,21 +136,48 @@ mod tests {
         assert_eq!(f.opcodes.len(), 4);
 
         let op = f.opcodes.get(0).unwrap();
-        assert_eq!(op.hint, "p: Integer; Value: Extended");
+        assert_eq!(
+            op.params
+                .iter()
+                .map(|x| String::from(x))
+                .collect::<Vec<_>>()
+                .join("; "),
+            "p: Integer; Value: Extended"
+        );
 
-        assert_eq!(f.map.len(), 3);
-        assert_int_enum(f.map.get("test.Method.1.A"), 0);
-        assert_int_enum(f.map.get("test.Method.1.B"), 10);
-        assert_int_enum(f.map.get("test.Method.1.C"), 11);
+        assert!(!f.get_opcode_param_at(0, 0).unwrap().is_enum);
+        assert!(f.get_opcode_param_at(0, 1).unwrap().is_enum);
+
+        // get value by full name
+        let enum_val = f.get_enum_value_by_name("TeST.Method.1", "b").unwrap();
+
+        assert!(match enum_val {
+            EnumMember::Int(10) => true,
+            _ => false,
+        });
+
+        // get value by name for anonym enum
+        let enum_val = f
+            .get_anonymous_enum_value_by_member_name(0, 1, "B")
+            .unwrap();
+        assert!(match enum_val {
+            EnumMember::Int(10) => true,
+            _ => false,
+        });
+
+        assert_eq!(
+            f.get_anonymous_enum_name_by_member_value(0, 1, &EnumMember::Int(10)),
+            Some(&String::from("B"))
+        );
 
         let op = f.opcodes.get(1).unwrap();
-        assert_eq!(op.hint, "Value: Type");
+        assert_eq!(String::from(op.params.get(0).unwrap()), "Value: Type");
 
         let op = f.opcodes.get(2).unwrap();
-        assert_eq!(op.hint, "Value: Unknown");
+        assert_eq!(String::from(op.params.get(0).unwrap()), "Value: Unknown");
 
         let op = f.opcodes.get(3).unwrap();
-        assert_eq!(op.hint, "_: boolean");
+        assert_eq!(String::from(op.params.get(0).unwrap()), "_: boolean");
     }
 
     #[test]
@@ -155,10 +200,28 @@ mod tests {
         }
     }
 
-    fn assert_int_enum(e: Option<&Member>, val: i32) {
-        match e {
-            Some(Member::int(x)) => assert_eq!(*x, val),
-            _ => assert!(false),
-        }
+    #[test]
+    fn test_case_ins_search() {
+        let mut f = Namespaces::new();
+        let content = f.load_classes("src/namespaces/test/classes_prop2.db");
+        assert!(content.is_ok(), content.unwrap_err());
+
+        let enum_val = f.get_anonymous_enum_name_by_member_value(0, 0, &EnumMember::Int(11));
+        assert!(match enum_val {
+            Some(x) => x == "PedType11",
+            _ => false,
+        });
+
+        let enum_val = f.get_enum_value_by_name("TEST.HEALTH.0", "PEDTYPE11");
+        assert!(match enum_val {
+            Some(&EnumMember::Int(11)) => true,
+            _ => false,
+        });
+
+        let enum_val = f.get_anonymous_enum_value_by_member_name(0, 0, "PEDTYPE11");
+        assert!(match enum_val {
+            Some(&EnumMember::Int(11)) => true,
+            _ => false,
+        });
     }
 }
