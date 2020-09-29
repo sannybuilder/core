@@ -15,21 +15,28 @@ use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
 
-pub enum HintParamValue<'a> {
+pub struct Param<'a> {
+    pub name: &'a str,
+    pub _type: ParamType<'a>,
+}
+
+pub enum ParamType<'a> {
+    Text(&'a str),
+    Enum(Vec<ParamTypeEnum<'a>>),
+}
+
+pub struct ParamTypeEnum<'a> {
+    pub name: &'a str,
+    pub is_anonymous: bool,
+    pub value: ParamTypeEnumValue<'a>,
+}
+
+pub enum ParamTypeEnumValue<'a> {
     Empty,
     Text(&'a str),
 }
-pub enum HintParam<'a> {
-    Text(&'a str),
-    Enum(Vec<(&'a str, HintParamValue<'a>)>),
-}
 
-pub struct Param<'a> {
-    pub name: &'a str,
-    pub _type: HintParam<'a>,
-}
-
-pub fn hint(input: &str) -> IResult<&str, Vec<Param>> {
+pub fn params(input: &str) -> IResult<&str, Vec<Param>> {
     delimited(
         char('('),
         many0(delimited(
@@ -54,9 +61,9 @@ pub fn hint(input: &str) -> IResult<&str, Vec<Param>> {
     )(input)
 }
 
-pub fn hint_fixed_type(input: &str) -> IResult<&str, HintParam> {
+pub fn hint_fixed_type(input: &str) -> IResult<&str, ParamType> {
     map(preceded(char('%'), is_not("\"")), |param_type| {
-        HintParam::Text(match param_type {
+        ParamType::Text(match param_type {
             "h" => "Handle",
             "v" | "s" => "String",
             "b" => "Boolean",
@@ -67,35 +74,42 @@ pub fn hint_fixed_type(input: &str) -> IResult<&str, HintParam> {
     })(input)
 }
 
-pub fn hint_arbitrary_type(input: &str) -> IResult<&str, HintParam> {
+pub fn hint_arbitrary_type(input: &str) -> IResult<&str, ParamType> {
     preceded(
         terminated(char(':'), space0),
-        alt((hint_enum_type, hint_plain_type)),
+        alt((hint_anonymous_enum_type, hint_plain_type)),
     )(input)
 }
 
-pub fn hint_unknown_type(input: &str) -> IResult<&str, HintParam> {
-    Ok((input, HintParam::Text("Unknown")))
+pub fn hint_unknown_type(input: &str) -> IResult<&str, ParamType> {
+    Ok((input, ParamType::Text("Unknown")))
 }
 
-pub fn hint_enum_type(input: &str) -> IResult<&str, HintParam> {
+pub fn hint_anonymous_enum_type(input: &str) -> IResult<&str, ParamType> {
     map(
         many1(preceded(
             char('^'),
-            tuple((
-                is_not("^=\""),
-                map(opt(preceded(char('='), is_not("^\""))), |val| match val {
-                    Some(val) => HintParamValue::Text(val),
-                    None => HintParamValue::Empty,
-                }),
-            )),
+            map(
+                tuple((
+                    is_not("^=\""),
+                    map(opt(preceded(char('='), is_not("^\""))), |val| match val {
+                        Some(val) => ParamTypeEnumValue::Text(val),
+                        None => ParamTypeEnumValue::Empty,
+                    }),
+                )),
+                |(name, value)| ParamTypeEnum {
+                    name,
+                    value,
+                    is_anonymous: true,
+                },
+            ),
         )),
-        |v| HintParam::Enum(v),
+        |v| ParamType::Enum(v),
     )(input)
 }
 
-pub fn hint_plain_type(input: &str) -> IResult<&str, HintParam> {
-    map(is_not("\""), |x| HintParam::Text(x))(input)
+pub fn hint_plain_type(input: &str) -> IResult<&str, ParamType> {
+    map(is_not("\""), |x| ParamType::Text(x))(input)
 }
 
 pub fn method(input: &str) -> IResult<&str, (&str, &str, &str, &str, Vec<Param>)> {
@@ -104,7 +118,7 @@ pub fn method(input: &str) -> IResult<&str, (&str, &str, &str, &str, Vec<Param>)
         terminated(literal, comma), // id
         terminated(literal, comma), // type
         literal,                    // help_code,
-        map(opt(preceded(comma, hint)), |params| {
+        map(opt(preceded(comma, params)), |params| {
             params.unwrap_or(vec![])
         }),
     )))(input)
@@ -138,7 +152,7 @@ pub fn property(
                     char(']'),
                 ),
             ),
-            map(opt(preceded(comma, hint)), |params| {
+            map(opt(preceded(comma, params)), |params| {
                 params.unwrap_or(vec![])
             }),
         )),
