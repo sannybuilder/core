@@ -48,12 +48,12 @@ where
         }
     }
 
-    pub fn load_file<'a>(&mut self, file_name: &'a str) -> Result<(), std::io::Error> {
-        let content = std::fs::read_to_string(file_name)?;
+    pub fn load_file<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_file(content)
     }
 
-    pub fn parse_file<'a>(&mut self, content: String) -> Result<(), std::io::Error> {
+    pub fn parse_file<'a>(&mut self, content: String) -> Option<()> {
         let comments = self.comments.as_str();
         let strip = self.strip_whitespace;
         let lines = content
@@ -86,7 +86,7 @@ where
                 _ => {}
             }
         }
-        Ok(())
+        Some(())
     }
 }
 

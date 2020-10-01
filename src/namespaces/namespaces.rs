@@ -1,43 +1,7 @@
 use crate::namespaces::*;
-use error::ParseError;
 use parser::{method, property, ParamType, ParamTypeEnumValue};
 use std::collections::HashMap;
 use std::ffi::CString;
-
-pub struct EnumMember {
-    pub is_anonymous: bool,
-    pub name: CString,
-    pub value: EnumMemberValue,
-}
-
-pub enum EnumMemberValue {
-    Int(i32),
-    Float(f32),
-    Text(String),
-}
-
-#[repr(C)]
-pub struct OpcodeParam {
-    pub is_enum: bool,
-    pub name: CString,
-    pub _type: CString,
-}
-
-// impl std::convert::From<&OpcodeParam> for String {
-//     fn from(x: &OpcodeParam) -> Self {
-//         let _type = if x.is_enum {
-//             "Extended"
-//         } else {
-//             let z = x._type.clone();
-//             z.into_string().unwrap().as_str()
-//         };
-//         format!(
-//             "{}: {}",
-//             x.name.clone().into_string().unwrap().as_str(),
-//             _type
-//         )
-//     }
-// }
 
 pub struct Namespaces {
     pub names: Vec<String>, // case-preserved
@@ -60,10 +24,39 @@ pub struct Opcode {
     pub params: Vec<OpcodeParam>,
 }
 
+#[repr(C)]
+pub struct OpcodeParam {
+    pub is_enum: bool,
+    pub name: CString,
+    pub _type: CString,
+}
+
 pub enum OpcodeType {
     Method,
     Condition,
     Property,
+}
+
+pub struct EnumMember {
+    pub is_anonymous: bool,
+    pub name: CString,
+    pub value: EnumMemberValue,
+}
+
+pub enum EnumMemberValue {
+    Int(i32),
+    Float(f32),
+    Text(String),
+}
+
+impl From<&str> for OpcodeType {
+    fn from(s: &str) -> Self {
+        match s {
+            "1" => OpcodeType::Condition,
+            "2" => OpcodeType::Property,
+            _ => OpcodeType::Method,
+        }
+    }
 }
 
 struct PropKey<'a> {
@@ -78,16 +71,6 @@ impl<'a> From<PropKey<'a>> for String {
     }
 }
 
-impl From<&str> for OpcodeType {
-    fn from(s: &str) -> Self {
-        match s {
-            "1" => OpcodeType::Condition,
-            "2" => OpcodeType::Property,
-            _ => OpcodeType::Method,
-        }
-    }
-}
-
 impl Namespaces {
     pub fn new() -> Self {
         Self {
@@ -99,12 +82,12 @@ impl Namespaces {
         }
     }
 
-    pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Result<(), ParseError> {
-        let content = std::fs::read_to_string(file_name)?;
+    pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_classes(content)
     }
 
-    fn parse_classes<'a>(&mut self, content: String) -> Result<(), ParseError> {
+    fn parse_classes<'a>(&mut self, content: String) -> Option<()> {
         let lines = content
             .lines()
             .map(|line| line.trim())
@@ -115,7 +98,7 @@ impl Namespaces {
 
         if let Some(line) = line_iter.next() {
             if !line.eq_ignore_ascii_case("#classeslist") {
-                return Err(ParseError::new("#CLASSESLIST not found"));
+                return None;
             };
 
             while let Some(line) = line_iter.next() {
@@ -124,7 +107,7 @@ impl Namespaces {
                     continue;
                 }
                 if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
-                    return Ok(());
+                    return Some(());
                 }
                 break;
             }
@@ -162,7 +145,7 @@ impl Namespaces {
                 }
             }
         }
-        Ok(())
+        Some(())
     }
 
     fn parse_method(
@@ -245,46 +228,50 @@ impl Namespaces {
         params
             .iter()
             .enumerate()
-            .map(|(param_index, param)| match &param._type {
-                ParamType::Text(_type) => OpcodeParam {
-                    is_enum: false,
-                    name: CString::new(param.name).unwrap(),
-                    _type: CString::new(*_type).unwrap(),
-                },
-                ParamType::Enum(enum_members) => {
-                    let mut index = 0;
-                    let enum_name = format!("{}.{}", full_name, param_index);
-                    let mut members = HashMap::new();
-                    for enum_member in enum_members {
-                        let member = match enum_member.value {
-                            ParamTypeEnumValue::Empty => EnumMemberValue::Int(index),
-                            ParamTypeEnumValue::Text(text) => match i32::from_str_radix(text, 10) {
-                                Ok(v) => {
-                                    index = v;
-                                    EnumMemberValue::Int(v)
+            .filter_map(|(param_index, param)| -> Option<OpcodeParam> {
+                match &param._type {
+                    ParamType::Text(_type) => Some(OpcodeParam {
+                        is_enum: false,
+                        name: CString::new(param.name).ok()?,
+                        _type: CString::new(*_type).ok()?,
+                    }),
+                    ParamType::Enum(enum_members) => {
+                        let mut index = 0;
+                        let enum_name = format!("{}.{}", full_name, param_index);
+                        let mut members = HashMap::new();
+                        for enum_member in enum_members {
+                            let member = match enum_member.value {
+                                ParamTypeEnumValue::Empty => EnumMemberValue::Int(index),
+                                ParamTypeEnumValue::Text(text) => {
+                                    match i32::from_str_radix(text, 10) {
+                                        Ok(v) => {
+                                            index = v;
+                                            EnumMemberValue::Int(v)
+                                        }
+                                        Err(_) => EnumMemberValue::Text(text.to_string()),
+                                    }
                                 }
-                                Err(_) => EnumMemberValue::Text(text.to_string()),
-                            },
-                        };
-                        index += 1;
+                            };
+                            index += 1;
 
-                        let key = enum_member.name;
-                        members.insert(
-                            key.to_ascii_lowercase(),
-                            EnumMember {
-                                name: CString::new(key).unwrap(),
-                                value: member,
-                                is_anonymous: enum_member.is_anonymous,
-                            },
-                        );
-                    }
+                            let key = enum_member.name;
+                            members.insert(
+                                key.to_ascii_lowercase(),
+                                EnumMember {
+                                    name: CString::new(key).ok()?,
+                                    value: member,
+                                    is_anonymous: enum_member.is_anonymous,
+                                },
+                            );
+                        }
 
-                    self.map_enum
-                        .insert(enum_name.to_ascii_lowercase(), members);
-                    OpcodeParam {
-                        is_enum: true,
-                        name: CString::new(param.name).unwrap(),
-                        _type: CString::new(enum_name).unwrap(),
+                        self.map_enum
+                            .insert(enum_name.to_ascii_lowercase(), members);
+                        Some(OpcodeParam {
+                            is_enum: true,
+                            name: CString::new(param.name).ok()?,
+                            _type: CString::new(enum_name).ok()?,
+                        })
                     }
                 }
             })
@@ -398,7 +385,7 @@ impl Namespaces {
     ) -> Option<&EnumMemberValue> {
         let param = self.get_opcode_param_at(op_index, param_index)?;
         if param.is_enum {
-            self.get_enum_value_by_name(&param._type.to_str().unwrap(), member_name)
+            self.get_enum_value_by_name(&param._type.to_str().ok()?, member_name)
         } else {
             None
         }

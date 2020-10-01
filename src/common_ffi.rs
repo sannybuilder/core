@@ -3,22 +3,12 @@ use std::ffi::{CStr, CString};
 
 pub type PChar = *const c_char;
 
-pub fn pchar_to_string<'a>(s: PChar) -> String {
-    unsafe { String::from(CStr::from_ptr(s).to_str().unwrap()) }
+pub fn pchar_to_string<'a>(s: PChar) -> Option<String> {
+    Some(String::from(pchar_to_str(s)?))
 }
 
-pub fn pchar_to_str<'a>(s: PChar) -> &'a str {
-    unsafe { CStr::from_ptr(s).to_str().unwrap() }
-}
-
-#[allow(dead_code)]
-pub fn string_to_pchar(s: String) -> PChar {
-    CString::new(s).unwrap().into_raw()
-}
-
-#[allow(dead_code)]
-pub fn str_to_pchar(s: &str) -> PChar {
-    CString::new(s).unwrap().into_raw()
+pub fn pchar_to_str<'a>(s: PChar) -> Option<&'a str> {
+    unsafe { Some(CStr::from_ptr(s).to_str().ok()?) }
 }
 
 #[no_mangle]
@@ -38,4 +28,17 @@ pub unsafe fn ptr_free<T>(ptr: *mut T) {
 
 pub fn ptr_new<T>(o: T) -> *mut T {
     Box::into_raw(Box::new(o))
+}
+
+#[allow(unused_macros)]
+macro_rules! pchar {
+    ($name:expr) => {
+        CString::new($name).unwrap().as_ptr()
+    };
+}
+
+macro_rules! boolclosure {
+    ($b:block) => {
+        || -> Option<()> { $b }().is_some()
+    };
 }
