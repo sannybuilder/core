@@ -152,7 +152,7 @@ mod tests {
         assert_eq!(op.id, 1);
         assert!(matches!(op.op_type, OpcodeType::Method));
         assert_eq!(op.help_code, 0);
-        // assert_eq!(String::from(op.params.get(0).unwrap()), "p: Boolean");
+        assert_eq!(op.hint, CString::new("\"p: Boolean\"").unwrap());
 
         let op = f.get_opcode_by_index(0).unwrap();
         let name = op.name.clone().into_string().unwrap();
@@ -221,7 +221,7 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_some());
         assert_eq!(f.classes_count(), 28);
-        assert_eq!(f.op_count(), 944); //wrong
+        assert_eq!(f.op_count(), 971); //wrong
     }
 
     #[test]
@@ -233,27 +233,20 @@ mod tests {
         assert_eq!(f.op_count(), 4);
 
         let op = f.get_opcode_by_index(0).unwrap();
-        // assert_eq!(
-        //     op.params
-        //         .iter()
-        //         .map(|x| String::from(x))
-        //         .collect::<Vec<_>>()
-        //         .join("; "),
-        //     "p: Integer; Value: Extended"
-        // );
+        assert_eq!(
+            op.hint,
+            CString::new("\"p: Integer\" \"Value: Extended\"").unwrap()
+        );
 
         assert!(!f.get_opcode_param_at(0, 0).unwrap().is_enum);
         assert!(f.get_opcode_param_at(0, 1).unwrap().is_enum);
 
-        // get value by full name
         let enum_val = f.get_enum_value_by_name("TeST.Method.1", "b").unwrap();
-
         assert!(match enum_val {
             EnumMemberValue::Int(10) => true,
             _ => false,
         });
 
-        // get value by name for anonym enum
         let enum_val = f
             .get_anonymous_enum_value_by_member_name(0, 1, "B")
             .unwrap();
@@ -267,14 +260,14 @@ mod tests {
             Some(&CString::new("B").unwrap())
         );
 
-        // let op = f.opcodes.get(1).unwrap();
-        // assert_eq!(String::from(op.params.get(0).unwrap()), "Value: Type");
+        let op = f.get_opcode_by_index(1).unwrap();
+        assert_eq!(op.hint, CString::new("\"Value: Type\"").unwrap());
 
-        // let op = f.opcodes.get(2).unwrap();
-        // assert_eq!(String::from(op.params.get(0).unwrap()), "Value: Unknown");
+        let op = f.get_opcode_by_index(2).unwrap();
+        assert_eq!(op.hint, CString::new("\"Value: Unknown\"").unwrap());
 
-        // let op = f.opcodes.get(3).unwrap();
-        // assert_eq!(String::from(op.params.get(0).unwrap()), "_: boolean");
+        let op = f.get_opcode_by_index(3).unwrap();
+        assert_eq!(op.hint, CString::new("\"_: boolean\"").unwrap());
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub struct Opcode {
     pub prop_pos: u8, // 1-left, 2-right
     pub name: CString,
     pub operation: CString, // used in decompiler output
+    pub hint: CString,
     pub params_len: i32,
     pub params: Vec<OpcodeParam>,
 }
@@ -38,6 +39,20 @@ pub struct OpcodeParam {
     pub is_enum: bool,
     pub name: CString,
     pub _type: CString,
+}
+
+impl<'a> From<&OpcodeParam> for String {
+    fn from(s: &OpcodeParam) -> String {
+        format!(
+            "\"{}: {}\"",
+            s.name.to_str().unwrap_or(""),
+            if s.is_enum {
+                "Extended"
+            } else {
+                s._type.to_str().unwrap_or("")
+            }
+        )
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -106,7 +121,10 @@ impl Namespaces {
 
         let mut line_iter = lines.into_iter();
 
-        let line = line_iter.next()?;
+        let line = match line_iter.next() {
+            Some(x) => x,
+            None => return Some(()), // no content -> exit with success
+        };
         if !line.eq_ignore_ascii_case("#classeslist") {
             return None;
         };
@@ -133,7 +151,10 @@ impl Namespaces {
             }
             let name = &line[1..];
 
-            let find_name = names_str.iter().find(|n| n.eq_ignore_ascii_case(name))?;
+            let find_name = match names_str.iter().find(|n| n.eq_ignore_ascii_case(name)) {
+                Some(x) => x,
+                None => continue, // undeclared class -> skip
+            };
 
             if line_iter.next()?.eq_ignore_ascii_case("$begin") {
                 let name = &find_name.clone();
@@ -170,6 +191,7 @@ impl Namespaces {
         let params = self.parse_params(&hint_params, &full_name);
 
         let op_index = self.register_opcode(Opcode {
+            hint: self.params_to_string(&params)?,
             params_len: params.len() as i32,
             id,
             params,
@@ -183,6 +205,16 @@ impl Namespaces {
         });
         map.insert(name.to_ascii_lowercase(), op_index);
         Some(())
+    }
+
+    fn params_to_string(&self, params: &Vec<OpcodeParam>) -> Option<CString> {
+        let s = params
+            .iter()
+            .map(|p| p.into())
+            .collect::<Vec<String>>()
+            .join(" ");
+
+        CString::new(s).ok()
     }
 
     fn parse_prop(
@@ -202,8 +234,8 @@ impl Namespaces {
             let params_len = params.len();
             let help_code = i32::from_str_radix(help_code, 10).ok()?;
 
-            if op_type == OpcodeType::Property {
-                let prop_params = if prop_pos == 2 {
+            let prop_params = if op_type == OpcodeType::Property {
+                if prop_pos == 2 {
                     params.iter().cloned().skip(1).collect::<Vec<_>>()
                 } else {
                     params
@@ -211,42 +243,48 @@ impl Namespaces {
                         .cloned()
                         .take(params_len - 1)
                         .collect::<Vec<_>>() // todo: tests
-                };
+                }
+            } else {
+                params.iter().cloned().collect::<Vec<_>>()
+            };
 
-                let op_index = self.register_opcode(Opcode {
-                    params_len: prop_params.len() as i32,
-                    id,
-                    params: prop_params,
-                    prop_pos, // left=1 (setters or comparison) right=2 (getters or constructors)
-                    op_type,  // regular=0 or conditional=1 or hybrid (constructor)=2
-                    help_code,
-                    name: CString::new(full_name.clone()).ok()?,
-                    prop_type: OpcodeType::Property,
-                    operation: CString::new(operation).ok()?,
-                });
-                let key = PropKey {
-                    name,
-                    prop_pos,
-                    operation,
-                };
-                map.insert(String::from(key).to_ascii_lowercase(), op_index);
-            }
-
-            // add a method version of this opcode with all params
             let op_index = self.register_opcode(Opcode {
-                params_len: params.len() as i32,
+                hint: self.params_to_string(&params)?,
+                params_len: prop_params.len() as i32,
                 id,
-                params,
+                params: prop_params,
+                prop_pos, // left=1 (setters or comparison) right=2 (getters or constructors)
+                op_type,  // regular=0 or conditional=1 or hybrid (constructor)=2
                 help_code,
-                name: CString::new(full_name).ok()?,
-                op_type: OpcodeType::Method,
-
-                prop_type: OpcodeType::Method,
-                prop_pos: 0,
-                operation: CString::new("").ok()?,
+                name: CString::new(full_name.clone()).ok()?,
+                prop_type: OpcodeType::Property,
+                operation: CString::new(operation).ok()?,
             });
+            let key = PropKey {
+                name,
+                prop_pos,
+                operation,
+            };
+            map.insert(String::from(key).to_ascii_lowercase(), op_index);
 
-            map.insert(name.to_ascii_lowercase(), op_index);
+            if op_type == OpcodeType::Property {
+                // add a method version of this opcode with all params
+                let op_index = self.register_opcode(Opcode {
+                    hint: self.params_to_string(&params)?,
+                    params_len: params.len() as i32,
+                    id,
+                    params,
+                    help_code,
+                    name: CString::new(full_name).ok()?,
+                    op_type: OpcodeType::Method,
+
+                    prop_type: OpcodeType::Method,
+                    prop_pos: 0,
+                    operation: CString::new("").ok()?,
+                });
+
+                map.insert(name.to_ascii_lowercase(), op_index);
+            }
         }
         Some(())
     }
