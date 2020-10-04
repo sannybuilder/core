@@ -3,12 +3,20 @@ use parser::{method, property, ParamType, ParamTypeEnumValue};
 use std::collections::HashMap;
 use std::ffi::CString;
 
+/**
+ * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
+ * defined in the compiler.ini took first 20 slots and classes started their numeration from 20
+ *
+ * this should not be needed once all types moved here
+ */
+static CID: usize = 20;
+
 pub struct Namespaces {
-    pub names: Vec<String>, // case-preserved
-    pub opcodes: Vec<Opcode>,
-    pub map_op_by_id: HashMap<u16, usize>,
-    pub map_op_by_name: HashMap<String, HashMap<String, usize>>,
-    pub map_enum: HashMap<String, HashMap<String, EnumMember>>,
+    names: Vec<CString>, // case-preserved
+    opcodes: Vec<Opcode>,
+    map_op_by_id: HashMap<u16, usize>,
+    map_op_by_name: HashMap<String, HashMap<String, usize>>,
+    map_enum: HashMap<String, HashMap<String, EnumMember>>,
 }
 
 #[repr(C)]
@@ -25,12 +33,14 @@ pub struct Opcode {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct OpcodeParam {
     pub is_enum: bool,
     pub name: CString,
     pub _type: CString,
 }
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum OpcodeType {
     Method,
     Condition,
@@ -96,53 +106,50 @@ impl Namespaces {
 
         let mut line_iter = lines.into_iter();
 
-        if let Some(line) = line_iter.next() {
-            if !line.eq_ignore_ascii_case("#classeslist") {
-                return None;
-            };
+        let line = line_iter.next()?;
+        if !line.eq_ignore_ascii_case("#classeslist") {
+            return None;
+        };
 
-            while let Some(line) = line_iter.next() {
-                if !line.starts_with(|c| c == '#' || c == '$') {
-                    self.names.push(String::from(line));
-                    continue;
-                }
-                if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
-                    return Some(());
-                }
-                break;
+        let mut names_str: Vec<String> = vec![];
+        while let Some(line) = line_iter.next() {
+            if !line.starts_with(|c| c == '#' || c == '$') {
+                self.names.push(CString::new(line).ok()?);
+                names_str.push(String::from(line));
+                continue;
             }
+            if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
+                return Some(());
+            }
+            break;
+        }
 
-            while let Some(line) = line_iter.next() {
-                if !line.starts_with("$") {
-                    continue;
-                }
-                if line.eq_ignore_ascii_case("$begin") || line.eq_ignore_ascii_case("$end") {
-                    continue;
-                }
-                let name = &line[1..];
+        while let Some(line) = line_iter.next() {
+            if !line.starts_with("$") {
+                continue;
+            }
+            if line.eq_ignore_ascii_case("$begin") || line.eq_ignore_ascii_case("$end") {
+                continue;
+            }
+            let name = &line[1..];
 
-                let find_name = self.names.iter().find(|n| n.eq_ignore_ascii_case(name));
+            let find_name = names_str.iter().find(|n| n.eq_ignore_ascii_case(name))?;
 
-                if let Some(name) = find_name {
-                    if let Some(line) = line_iter.next() {
-                        if line.eq_ignore_ascii_case("$begin") {
-                            let name = &name.clone();
-                            let mut map: HashMap<String, usize> = HashMap::new();
-                            for line in line_iter
-                                .by_ref()
-                                .take_while(|line| !line.starts_with(|c| c == '#' || c == '$'))
-                            {
-                                match self.parse_method(line, name, &mut map) {
-                                    Some(_) => {}
-                                    None => {
-                                        println!("Can't parse the line {}", line);
-                                    }
-                                }
-                            }
-                            self.map_op_by_name.insert(name.to_ascii_lowercase(), map);
+            if line_iter.next()?.eq_ignore_ascii_case("$begin") {
+                let name = &find_name.clone();
+                let mut map: HashMap<String, usize> = HashMap::new();
+                for line in line_iter
+                    .by_ref()
+                    .take_while(|line| !line.starts_with(|c| c == '#' || c == '$'))
+                {
+                    match self.parse_method(line, name, &mut map) {
+                        Some(_) => {}
+                        None => {
+                            println!("Can't parse the line {}", line);
                         }
                     }
                 }
+                self.map_op_by_name.insert(name.to_ascii_lowercase(), map);
             }
         }
         Some(())
@@ -157,29 +164,25 @@ impl Namespaces {
         if line.starts_with("^") {
             return self.parse_prop(line, class_name, map);
         }
-        match method(line) {
-            Ok((_, (name, id, r#type, help_code, hint_params))) => {
-                let id = u16::from_str_radix(id, 16).ok()?;
-                let full_name = String::from(format!("{}.{}", class_name, name));
-                let params = self.parse_params(&hint_params, &full_name);
+        let (_, (name, id, r#type, help_code, hint_params)) = method(line).ok()?;
+        let id = u16::from_str_radix(id, 16).ok()?;
+        let full_name = String::from(format!("{}.{}", class_name, name));
+        let params = self.parse_params(&hint_params, &full_name);
 
-                let op_index = self.register_opcode(Opcode {
-                    params_len: params.len() as i32,
-                    id,
-                    params,
-                    name: CString::new(full_name).ok()?,
-                    op_type: r#type.into(),
-                    help_code: i32::from_str_radix(help_code, 10).ok()?,
+        let op_index = self.register_opcode(Opcode {
+            params_len: params.len() as i32,
+            id,
+            params,
+            name: CString::new(full_name).ok()?,
+            op_type: r#type.into(), // regular=0 or conditional=1
+            help_code: i32::from_str_radix(help_code, 10).ok()?,
 
-                    prop_type: OpcodeType::Method,
-                    operation: CString::new("").ok()?,
-                    prop_pos: 0,
-                });
-                map.insert(name.to_ascii_lowercase(), op_index);
-                Some(())
-            }
-            _ => None,
-        }
+            prop_type: OpcodeType::Method,
+            operation: CString::new("").ok()?,
+            prop_pos: 0,
+        });
+        map.insert(name.to_ascii_lowercase(), op_index);
+        Some(())
     }
 
     fn parse_prop(
@@ -188,36 +191,64 @@ impl Namespaces {
         class_name: &String,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
-        match property(line) {
-            Ok((_, (name, variations, hint_params))) => {
-                for (id, operation, prop_pos, r#type, help_code) in variations {
-                    let id = u16::from_str_radix(id, 16).ok()?;
-                    let full_name = String::from(format!("{}.{}", class_name, name));
-                    let params = self.parse_params(&hint_params, &full_name);
-                    let prop_pos = u8::from_str_radix(prop_pos, 10).ok()?;
-                    let key = PropKey {
-                        name,
-                        prop_pos,
-                        operation,
-                    };
+        let (_, (name, variations, hint_params)) = property(line).ok()?;
+        for (id, operation, prop_pos, _type, help_code) in variations {
+            let id = u16::from_str_radix(id, 16).ok()?;
+            let full_name = String::from(format!("{}.{}", class_name, name));
+            let params = self.parse_params(&hint_params, &full_name);
+            let prop_pos = u8::from_str_radix(prop_pos, 10).ok()?;
 
-                    let op_index = self.register_opcode(Opcode {
-                        params_len: params.len() as i32,
-                        id,
-                        params,
-                        prop_pos,
-                        name: CString::new(full_name).ok()?,
-                        op_type: r#type.into(),
-                        help_code: i32::from_str_radix(help_code, 10).ok()?,
-                        prop_type: OpcodeType::Property,
-                        operation: CString::new(operation).ok()?,
-                    });
-                    map.insert(String::from(key).to_ascii_lowercase(), op_index);
-                }
-                Some(())
+            let op_type = OpcodeType::from(_type);
+            let params_len = params.len();
+            let help_code = i32::from_str_radix(help_code, 10).ok()?;
+
+            if op_type == OpcodeType::Property {
+                let prop_params = if prop_pos == 2 {
+                    params.iter().cloned().skip(1).collect::<Vec<_>>()
+                } else {
+                    params
+                        .iter()
+                        .cloned()
+                        .take(params_len - 1)
+                        .collect::<Vec<_>>() // todo: tests
+                };
+
+                let op_index = self.register_opcode(Opcode {
+                    params_len: prop_params.len() as i32,
+                    id,
+                    params: prop_params,
+                    prop_pos, // left=1 (setters or comparison) right=2 (getters or constructors)
+                    op_type,  // regular=0 or conditional=1 or hybrid (constructor)=2
+                    help_code,
+                    name: CString::new(full_name.clone()).ok()?,
+                    prop_type: OpcodeType::Property,
+                    operation: CString::new(operation).ok()?,
+                });
+                let key = PropKey {
+                    name,
+                    prop_pos,
+                    operation,
+                };
+                map.insert(String::from(key).to_ascii_lowercase(), op_index);
             }
-            _ => None,
+
+            // add a method version of this opcode with all params
+            let op_index = self.register_opcode(Opcode {
+                params_len: params.len() as i32,
+                id,
+                params,
+                help_code,
+                name: CString::new(full_name).ok()?,
+                op_type: OpcodeType::Method,
+
+                prop_type: OpcodeType::Method,
+                prop_pos: 0,
+                operation: CString::new("").ok()?,
+            });
+
+            map.insert(name.to_ascii_lowercase(), op_index);
         }
+        Some(())
     }
 
     fn parse_params(
@@ -286,15 +317,19 @@ impl Namespaces {
         index
     }
 
+    pub fn op_count(&self) -> usize {
+        self.opcodes.len()
+    }
+
+    pub fn classes_count(&self) -> usize {
+        self.names.len()
+    }
+
     pub fn get_opcode_index_by_opcode(&self, opcode: u16) -> Option<&usize> {
         self.map_op_by_id.get(&opcode)
     }
 
-    pub fn get_class_method_index_by_name(
-        &self,
-        class_name: &str,
-        member_name: &str,
-    ) -> Option<&usize> {
+    pub fn get_opcode_index_by_name(&self, class_name: &str, member_name: &str) -> Option<&usize> {
         self.map_op_by_name
             .get(&class_name.to_ascii_lowercase())?
             .get(&member_name.to_ascii_lowercase())
@@ -312,11 +347,11 @@ impl Namespaces {
             prop_pos,
             operation,
         };
-        self.get_class_method_index_by_name(class_name, String::from(key).as_str())
+        self.get_opcode_index_by_name(class_name, String::from(key).as_str())
     }
 
     pub fn get_opcode_by_index(&self, op_index: usize) -> Option<&Opcode> {
-        Some(self.opcodes.get(op_index)?)
+        self.opcodes.get(op_index)
     }
 
     fn get_enum_by_name(&self, name: &str) -> Option<&HashMap<String, EnumMember>> {
@@ -386,6 +421,23 @@ impl Namespaces {
         let param = self.get_opcode_param_at(op_index, param_index)?;
         if param.is_enum {
             self.get_enum_value_by_name(&param._type.to_str().ok()?, member_name)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_class_id_by_name(&self, class_name: &str) -> Option<i32> {
+        for (i, val) in self.names.iter().enumerate() {
+            if val.to_str().ok()?.eq_ignore_ascii_case(class_name) {
+                return Some((i + CID) as i32);
+            }
+        }
+        return None;
+    }
+
+    pub fn get_class_name_by_id(&self, id: i32) -> Option<&CString> {
+        if id >= 20 {
+            self.names.iter().nth(id as usize - CID)
         } else {
             None
         }

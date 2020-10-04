@@ -18,22 +18,73 @@ pub unsafe extern "C" fn classes_load_file(ns: *mut Namespaces, file_name: PChar
 pub unsafe extern "C" fn classes_find_by_opcode(
     ns: *mut Namespaces,
     opcode: u16,
-    out: *mut i32,
+    out: *mut &Opcode,
 ) -> bool {
     boolclosure! {{
-        *out = *ns.as_mut()?.get_opcode_index_by_opcode(opcode)? as i32;
+        let ns = ns.as_mut()?;
+        let index = *ns.get_opcode_index_by_opcode(opcode)?;
+        *out = ns.get_opcode_by_index(index)?;
         Some(())
     }}
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn classes_get_opcode(
+pub unsafe extern "C" fn classes_find_by_name(
     ns: *mut Namespaces,
-    index: i32,
+    class_name: PChar,
+    prop_name: PChar,
     out: *mut &Opcode,
 ) -> bool {
     boolclosure! {{
-        *out = ns.as_mut()?.opcodes.get(index as usize)?;
+        let ns = ns.as_mut()?;
+        let index = *ns.get_opcode_index_by_name(pchar_to_str(class_name)?, pchar_to_str(prop_name)?)?;
+        *out = ns.get_opcode_by_index(index)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_find_by_prop(
+    ns: *mut Namespaces,
+    class_name: PChar,
+    prop_name: PChar,
+    prop_pos: u8,
+    operation: PChar,
+    out: *mut &Opcode,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        let index = *ns.get_class_property_index_by_name(
+            pchar_to_str(class_name)?,
+            pchar_to_str(prop_name)?,
+            prop_pos,
+            pchar_to_str(operation)?
+        )?;
+        *out = ns.get_opcode_by_index(index)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_class_id_by_name(
+    ns: *mut Namespaces,
+    name: PChar,
+    out: *mut i32,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_class_id_by_name(pchar_to_str(name)?)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_class_name_by_id(
+    ns: *mut Namespaces,
+    id: i32,
+    out: *mut PChar,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_class_name_by_id(id)?.as_ptr();
         Some(())
     }}
 }
@@ -55,6 +106,26 @@ pub unsafe extern "C" fn classes_get_enum_name_by_value_i32(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_get_enum_value_i32_by_name(
+    ns: *mut Namespaces,
+    enum_name: PChar,
+    enum_member: PChar,
+    out: *mut i32,
+) -> bool {
+    boolclosure! {{
+        let value = ns.as_mut()?.get_enum_value_by_name(
+            pchar_to_str(enum_name)?,
+            pchar_to_str(enum_member)?,
+        )?;
+        match value{
+            EnumMemberValue::Int(x) => { *out = *x; }
+            _ => return None
+        }
+        Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
     ptr_free(ns);
 }
@@ -70,11 +141,11 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_one_class.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 1);
+        assert_eq!(f.classes_count(), 1);
 
-        assert_eq!(f.opcodes.len(), 1);
-        let &i = f.map_op_by_id.get(&1).unwrap();
-        let op = &f.opcodes.get(i).unwrap();
+        assert_eq!(f.op_count(), 1);
+        let &i = f.get_opcode_index_by_opcode(1).unwrap();
+        let op = &f.get_opcode_by_index(i).unwrap();
 
         let name = op.name.clone().into_string().unwrap();
         assert_eq!(name, "TEST.m");
@@ -90,7 +161,7 @@ mod tests {
         let op_index = f.get_opcode_index_by_opcode(1);
         assert_eq!(op_index, Some(&0));
 
-        assert!(f.get_class_method_index_by_name("TEST", "M").is_some());
+        assert!(f.get_opcode_index_by_name("TEST", "M").is_some());
     }
 
     #[test]
@@ -105,7 +176,7 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_only_classes.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 2);
+        assert_eq!(f.classes_count(), 2);
     }
 
     #[test]
@@ -113,7 +184,7 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_one_ignore_class.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 1);
+        assert_eq!(f.classes_count(), 1);
     }
 
     #[test]
@@ -121,8 +192,8 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_prop.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 1);
-        assert_eq!(f.opcodes.len(), 3);
+        assert_eq!(f.classes_count(), 1);
+        assert_eq!(f.op_count(), 3);
         let op_index = f.get_opcode_index_by_opcode(0x0226).unwrap();
         let op = f.get_opcode_by_index(*op_index).unwrap();
         let name = op.name.clone().into_string().unwrap();
@@ -140,8 +211,8 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_invalid.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 1);
-        assert_eq!(f.opcodes.len(), 0);
+        assert_eq!(f.classes_count(), 1);
+        assert_eq!(f.op_count(), 0);
     }
 
     #[test]
@@ -149,8 +220,8 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 28);
-        assert_eq!(f.opcodes.len(), 944); //wrong
+        assert_eq!(f.classes_count(), 28);
+        assert_eq!(f.op_count(), 944); //wrong
     }
 
     #[test]
@@ -158,10 +229,10 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_prop_hint.db");
         assert!(content.is_some());
-        assert_eq!(f.names.len(), 1);
-        assert_eq!(f.opcodes.len(), 4);
+        assert_eq!(f.classes_count(), 1);
+        assert_eq!(f.op_count(), 4);
 
-        let op = f.opcodes.get(0).unwrap();
+        let op = f.get_opcode_by_index(0).unwrap();
         // assert_eq!(
         //     op.params
         //         .iter()
@@ -208,22 +279,18 @@ mod tests {
 
     #[test]
     fn test_find() {
-        unsafe {
-            let f = classes_new();
-            let loaded = classes_load_file(f, pchar!("src/namespaces/test/classes_find.db"));
-            assert!(loaded);
+        let mut f = Namespaces::new();
+        f.load_classes("src/namespaces/test/classes_find.db");
 
-            let mut index = -1;
-            let found = classes_find_by_opcode(f, 1, &mut index);
+        let index = *f.get_opcode_index_by_opcode(1).unwrap();
+        let found = f.get_opcode_by_index(index).is_some();
+        assert!(found);
+        assert_eq!(index, 0);
 
-            assert!(found);
-            assert_eq!(index, 0);
-
-            let found = classes_find_by_opcode(f, 2, &mut index);
-            assert!(found);
-            assert_eq!(index, 1);
-            classes_free(f);
-        }
+        let index = *f.get_opcode_index_by_opcode(2).unwrap();
+        let found = f.get_opcode_by_index(index).is_some();
+        assert!(found);
+        assert_eq!(index, 1);
     }
 
     #[test]
