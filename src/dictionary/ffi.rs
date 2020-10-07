@@ -54,7 +54,7 @@ where
     }
 
     pub fn parse_file<'a>(&mut self, content: String) -> Option<()> {
-        let comments = self.comments.as_str();
+        let comments = self.comments.clone();
         let strip = self.strip_whitespace;
         let lines = content
             .lines()
@@ -65,7 +65,7 @@ where
                 }
                 line
             })
-            .filter(|line| !(line.is_empty() || line.starts_with(comments)));
+            .filter(|line| !(line.is_empty() || line.starts_with(&comments)));
 
         for line in lines {
             let v: Vec<&str> = line
@@ -78,15 +78,17 @@ where
             }
 
             match <(T, U)>::get_key_value(v[0], v[1], self.hex_keys, &self.case_format) {
-                Some((key, value)) => {
-                    if self.should_add(&key) {
-                        self.map.insert(key, value);
-                    }
-                }
+                Some((key, value)) => self.add(key, value),
                 _ => {}
             }
         }
         Some(())
+    }
+
+    pub fn add(&mut self, key: T, value: U) {
+        if self.should_add(&key) {
+            self.map.insert(key, value);
+        }
     }
 }
 

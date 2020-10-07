@@ -1,4 +1,4 @@
-mod dictionary_num_by_str;
-mod dictionary_str_by_num;
-mod dictionary_str_by_str;
-mod ffi;
+pub mod dictionary_num_by_str;
+pub mod dictionary_str_by_num;
+pub mod dictionary_str_by_str;
+pub mod ffi;

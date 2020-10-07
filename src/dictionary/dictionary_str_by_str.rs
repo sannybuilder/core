@@ -2,7 +2,7 @@ use crate::common_ffi::*;
 use crate::dictionary::ffi::*;
 use std::ffi::CString;
 
-type DictStrByStr = Dict<CString, CString>;
+pub type DictStrByStr = Dict<CString, CString>;
 
 #[no_mangle]
 pub extern "C" fn dictionary_str_by_str_new(
@@ -41,10 +41,8 @@ pub unsafe extern "C" fn dictionary_str_by_str_add(
     boolclosure! {{
        let dict = dict.as_mut()?;
        let key = CString::new(pchar_to_str(key)?).ok()?;
-       if dict.should_add(&key) {
-           let value = CString::new(pchar_to_str(value)?).ok()?;
-           dict.map.insert(key, value);
-       }
+       let value = CString::new(pchar_to_str(value)?).ok()?;
+       dict.add(key, value);
        Some(())
     }}
 }

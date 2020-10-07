@@ -1,3 +1,4 @@
+use crate::dictionary::dictionary_str_by_str::DictStrByStr;
 use crate::namespaces::*;
 use parser::{method, property, ParamType, ParamTypeEnumValue};
 use std::collections::HashMap;
@@ -14,9 +15,12 @@ static CID: usize = 20;
 pub struct Namespaces {
     names: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
-    map_op_by_id: HashMap<u16, usize>,
-    map_op_by_name: HashMap<String, HashMap<String, usize>>,
-    map_enum: HashMap<String, HashMap<String, EnumMember>>,
+    map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
+    map_op_by_name: HashMap<
+        /*class_name*/ String,
+        HashMap</*member_name*/ String, /*opcodes index*/ usize>,
+    >,
+    map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
 }
 
 #[repr(C)]
@@ -367,9 +371,12 @@ impl Namespaces {
         self.map_op_by_id.get(&opcode)
     }
 
+    fn get_class_by_name(&self, class_name: &str) -> Option<&HashMap<String, usize>> {
+        self.map_op_by_name.get(&class_name.to_ascii_lowercase())
+    }
+
     pub fn get_opcode_index_by_name(&self, class_name: &str, member_name: &str) -> Option<&usize> {
-        self.map_op_by_name
-            .get(&class_name.to_ascii_lowercase())?
+        self.get_class_by_name(class_name)?
             .get(&member_name.to_ascii_lowercase())
     }
 
@@ -479,5 +486,51 @@ impl Namespaces {
         } else {
             None
         }
+    }
+
+    pub fn filter_enum_by_name(
+        &self,
+        enum_name: &str,
+        needle: &str,
+        dict: &mut DictStrByStr,
+    ) -> Option<()> {
+        let members = self.get_enum_by_name(enum_name)?;
+        let needle = needle.to_ascii_lowercase();
+        for (key, member) in members {
+            if !key.starts_with(&needle) {
+                continue;
+            }
+            let value = match &member.value {
+                EnumMemberValue::Int(x) => x.to_string(),
+                EnumMemberValue::Float(x) => x.to_string(),
+                EnumMemberValue::Text(x) => x.to_string(),
+            };
+            dict.add(member.name.clone(), CString::new(value).ok()?);
+        }
+        Some(())
+    }
+
+    pub fn filter_class_props_by_name(
+        &self,
+        class_name: &str,
+        needle: &str,
+        dict: &mut DictStrByStr,
+    ) -> Option<()> {
+        let members = self.get_class_by_name(class_name)?;
+        let needle = needle.to_ascii_lowercase();
+        for (member, index) in members {
+            if !member.starts_with(&needle) {
+                continue;
+            }
+            let op = self.get_opcode_by_index(*index)?;
+
+            if op.help_code == -2 {
+                continue;
+            };
+
+            let prop_name = op.name.to_str().ok()?.split('.').nth(1)?;
+            dict.add(CString::new(prop_name).ok()?, op.hint.clone());
+        }
+        Some(())
     }
 }

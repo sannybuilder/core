@@ -1,4 +1,5 @@
 use crate::common_ffi::*;
+use crate::dictionary::dictionary_str_by_str::DictStrByStr;
 use crate::namespaces::*;
 use namespaces::{EnumMemberValue, Namespaces, Opcode};
 
@@ -89,6 +90,7 @@ pub unsafe extern "C" fn classes_get_class_name_by_id(
     }}
 }
 
+// todo: support_non_i32_enum
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_enum_name_by_value_i32(
     ns: *mut Namespaces,
@@ -105,6 +107,7 @@ pub unsafe extern "C" fn classes_get_enum_name_by_value_i32(
     }}
 }
 
+// todo: support_non_i32_enum
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_enum_value_i32_by_name(
     ns: *mut Namespaces,
@@ -126,6 +129,30 @@ pub unsafe extern "C" fn classes_get_enum_value_i32_by_name(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_filter_enum_by_name(
+    ns: *mut Namespaces,
+    enum_name: PChar,
+    needle: PChar,
+    dict: *mut DictStrByStr,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.filter_enum_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?, dict.as_mut()?)
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_filter_props_by_name(
+    ns: *mut Namespaces,
+    class_name: PChar,
+    needle: PChar,
+    dict: *mut DictStrByStr,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.filter_class_props_by_name(pchar_to_str(class_name)?, pchar_to_str(needle)?, dict.as_mut()?)
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
     ptr_free(ns);
 }
@@ -133,6 +160,8 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::dictionary_str_by_str::*;
+    use crate::dictionary::ffi::*;
     use namespaces::{EnumMemberValue, OpcodeType};
     use std::ffi::CString;
 
@@ -313,5 +342,29 @@ mod tests {
             Some(&EnumMemberValue::Int(11)) => true,
             _ => false,
         });
+    }
+
+    #[test]
+    fn test_filter_props() {
+        let mut f = Namespaces::new();
+        let content = f.load_classes("src/namespaces/test/classes_prop2.db");
+        assert!(content.is_some());
+        unsafe {
+            let d = dictionary_str_by_str_new(
+                Duplicates::Replace.into(),
+                CaseFormat::NoFormat.into(),
+                pchar!(""),
+                pchar!(""),
+                false,
+            );
+
+            assert!(f
+                .filter_class_props_by_name("Test", "M", d.as_mut().unwrap())
+                .is_some());
+
+            assert_eq!(dictionary_str_by_str_get_count(d), 1);
+
+            dictionary_str_by_str_free(d);
+        }
     }
 }

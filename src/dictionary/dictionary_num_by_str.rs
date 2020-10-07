@@ -2,7 +2,7 @@ use crate::common_ffi::*;
 use crate::dictionary::ffi::*;
 use std::ffi::CString;
 
-type DictNumByStr = Dict<CString, i32>;
+pub type DictNumByStr = Dict<CString, i32>;
 
 #[no_mangle]
 pub extern "C" fn dictionary_num_by_str_new(
