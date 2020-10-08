@@ -1,6 +1,3 @@
-use crate::dictionary::dictionary_str_by_str::DictStrByStr;
-use crate::namespaces::*;
-use parser::{method, property, ParamType, ParamTypeEnumValue};
 use std::collections::HashMap;
 use std::ffi::CString;
 
@@ -186,6 +183,8 @@ impl Namespaces {
         class_name: &String,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
+        use crate::namespaces::parser::method;
+
         if line.starts_with("^") {
             return self.parse_prop(line, class_name, map);
         }
@@ -227,6 +226,8 @@ impl Namespaces {
         class_name: &String,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
+        use crate::namespaces::parser::property;
+
         let (_, (name, variations, hint_params)) = property(line).ok()?;
         for (id, operation, prop_pos, _type, help_code) in variations {
             let id = u16::from_str_radix(id, 16).ok()?;
@@ -295,9 +296,11 @@ impl Namespaces {
 
     fn parse_params(
         &mut self,
-        params: &Vec<namespaces::parser::Param>,
+        params: &Vec<crate::namespaces::parser::Param>,
         full_name: &String,
     ) -> Vec<OpcodeParam> {
+        use crate::namespaces::parser::{ParamType, ParamTypeEnumValue};
+
         params
             .iter()
             .enumerate()
@@ -472,8 +475,8 @@ impl Namespaces {
     }
 
     pub fn get_class_id_by_name(&self, class_name: &str) -> Option<i32> {
-        for (i, val) in self.names.iter().enumerate() {
-            if val.to_str().ok()?.eq_ignore_ascii_case(class_name) {
+        for (i, name) in self.names.iter().enumerate() {
+            if name.to_str().ok()?.eq_ignore_ascii_case(class_name) {
                 return Some((i + CID) as i32);
             }
         }
@@ -492,7 +495,7 @@ impl Namespaces {
         &self,
         enum_name: &str,
         needle: &str,
-        dict: &mut DictStrByStr,
+        dict: &mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
     ) -> Option<()> {
         let members = self.get_enum_by_name(enum_name)?;
         let needle = needle.to_ascii_lowercase();
@@ -510,11 +513,30 @@ impl Namespaces {
         Some(())
     }
 
+    pub fn filter_classes_by_name(
+        &self,
+        needle: &str,
+        dict: &mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
+    ) -> Option<()> {
+        let needle = needle.to_ascii_lowercase();
+        for name in &self.names {
+            if name
+                .to_str()
+                .ok()?
+                .to_ascii_lowercase()
+                .starts_with(&needle)
+            {
+                dict.add(name.clone(), CString::new("").ok()?);
+            }
+        }
+        Some(())
+    }
+
     pub fn filter_class_props_by_name(
         &self,
         class_name: &str,
         needle: &str,
-        dict: &mut DictStrByStr,
+        dict: &mut crate::dictionary::dictionary_num_by_str::DictNumByStr,
     ) -> Option<()> {
         let members = self.get_class_by_name(class_name)?;
         let needle = needle.to_ascii_lowercase();
@@ -524,12 +546,12 @@ impl Namespaces {
             }
             let op = self.get_opcode_by_index(*index)?;
 
-            if op.help_code == -2 {
+            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ op.op_type == OpcodeType::Property
+            {
                 continue;
             };
 
-            let prop_name = op.name.to_str().ok()?.split('.').nth(1)?;
-            dict.add(CString::new(prop_name).ok()?, op.hint.clone());
+            dict.add(CString::new(member.clone()).ok()?, &*op as *const _ as i32);
         }
         Some(())
     }

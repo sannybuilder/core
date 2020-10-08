@@ -1,7 +1,5 @@
 use crate::common_ffi::*;
-use crate::dictionary::dictionary_str_by_str::DictStrByStr;
-use crate::namespaces::*;
-use namespaces::{EnumMemberValue, Namespaces, Opcode};
+use crate::namespaces::namespaces::*;
 
 #[no_mangle]
 pub extern "C" fn classes_new() -> *mut Namespaces {
@@ -133,10 +131,21 @@ pub unsafe extern "C" fn classes_filter_enum_by_name(
     ns: *mut Namespaces,
     enum_name: PChar,
     needle: PChar,
-    dict: *mut DictStrByStr,
+    dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
         ns.as_mut()?.filter_enum_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?, dict.as_mut()?)
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_filter_classes_by_name(
+    ns: *mut Namespaces,
+    needle: PChar,
+    dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.filter_classes_by_name(pchar_to_str(needle)?, dict.as_mut()?)
     }}
 }
 
@@ -145,7 +154,7 @@ pub unsafe extern "C" fn classes_filter_props_by_name(
     ns: *mut Namespaces,
     class_name: PChar,
     needle: PChar,
-    dict: *mut DictStrByStr,
+    dict: *mut crate::dictionary::dictionary_num_by_str::DictNumByStr,
 ) -> bool {
     boolclosure! {{
         ns.as_mut()?.filter_class_props_by_name(pchar_to_str(class_name)?, pchar_to_str(needle)?, dict.as_mut()?)
@@ -160,9 +169,9 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dictionary::dictionary_num_by_str::*;
     use crate::dictionary::dictionary_str_by_str::*;
     use crate::dictionary::ffi::*;
-    use namespaces::{EnumMemberValue, OpcodeType};
     use std::ffi::CString;
 
     #[test]
@@ -350,9 +359,9 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_prop2.db");
         assert!(content.is_some());
         unsafe {
-            let d = dictionary_str_by_str_new(
+            let d = dictionary_num_by_str_new(
                 Duplicates::Replace.into(),
-                CaseFormat::NoFormat.into(),
+                false,
                 pchar!(""),
                 pchar!(""),
                 false,
@@ -362,9 +371,9 @@ mod tests {
                 .filter_class_props_by_name("Test", "M", d.as_mut().unwrap())
                 .is_some());
 
-            assert_eq!(dictionary_str_by_str_get_count(d), 1);
+            assert_eq!(dictionary_num_by_str_get_count(d), 1);
 
-            dictionary_str_by_str_free(d);
+            dictionary_num_by_str_free(d);
         }
     }
 }

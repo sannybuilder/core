@@ -1,6 +1,6 @@
 ## Namespaces
 
-Namespace is a scoped collection of named elements and values with them.
+Namespace is a scoped collection of named elements and values associated with them.
 
 There are two types of namespaces: enums and classes.
 
