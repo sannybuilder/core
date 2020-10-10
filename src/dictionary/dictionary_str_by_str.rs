@@ -39,10 +39,7 @@ pub unsafe extern "C" fn dictionary_str_by_str_add(
     value: PChar,
 ) -> bool {
     boolclosure! {{
-       let dict = dict.as_mut()?;
-       let key = CString::new(pchar_to_str(key)?).ok()?;
-       let value = CString::new(pchar_to_str(value)?).ok()?;
-       dict.add(key, value);
+       dict.as_mut()?.add_raw(pchar_to_str(key)?, pchar_to_str(value)?);
        Some(())
     }}
 }

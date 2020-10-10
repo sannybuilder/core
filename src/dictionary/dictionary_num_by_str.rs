@@ -33,6 +33,18 @@ pub unsafe extern "C" fn dictionary_num_by_str_load_file(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dictionary_num_by_str_add(
+    dict: *mut DictNumByStr,
+    key: PChar,
+    value: PChar,
+) -> bool {
+    boolclosure! {{
+       dict.as_mut()?.add_raw(pchar_to_str(key)?, pchar_to_str(value)?);
+       Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dictionary_num_by_str_find(
     dict: *mut DictNumByStr,
     key: PChar,

@@ -11,6 +11,7 @@ static CID: usize = 20;
 
 pub struct Namespaces {
     names: Vec<CString>, // case-preserved
+    props: Vec<String>,
     opcodes: Vec<Opcode>,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
@@ -101,6 +102,7 @@ impl Namespaces {
     pub fn new() -> Self {
         Self {
             names: vec![],
+            props: vec![],
             opcodes: vec![],
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
@@ -271,6 +273,7 @@ impl Namespaces {
                 operation,
             };
             map.insert(String::from(key).to_ascii_lowercase(), op_index);
+            self.props.push(name.to_ascii_lowercase());
 
             if op_type == OpcodeType::Property {
                 // add a method version of this opcode with all params
@@ -495,64 +498,68 @@ impl Namespaces {
         &self,
         enum_name: &str,
         needle: &str,
-        dict: &mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
-    ) -> Option<()> {
+    ) -> Option<Vec<(CString, CString)>> {
         let members = self.get_enum_by_name(enum_name)?;
         let needle = needle.to_ascii_lowercase();
-        for (key, member) in members {
-            if !key.starts_with(&needle) {
-                continue;
-            }
-            let value = match &member.value {
-                EnumMemberValue::Int(x) => x.to_string(),
-                EnumMemberValue::Float(x) => x.to_string(),
-                EnumMemberValue::Text(x) => x.to_string(),
-            };
-            dict.add(member.name.clone(), CString::new(value).ok()?);
-        }
-        Some(())
+
+        Some(
+            members
+                .iter()
+                .filter_map(|(key, member)| {
+                    if !key.starts_with(&needle) {
+                        return None;
+                    }
+                    let value = match &member.value {
+                        EnumMemberValue::Int(x) => x.to_string(),
+                        EnumMemberValue::Float(x) => x.to_string(),
+                        EnumMemberValue::Text(x) => x.to_string(),
+                    };
+                    Some((member.name.clone(), CString::new(value).ok()?))
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
-    pub fn filter_classes_by_name(
-        &self,
-        needle: &str,
-        dict: &mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
-    ) -> Option<()> {
+    pub fn filter_classes_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
         let needle = needle.to_ascii_lowercase();
-        for name in &self.names {
-            if name
-                .to_str()
-                .ok()?
-                .to_ascii_lowercase()
-                .starts_with(&needle)
-            {
-                dict.add(name.clone(), CString::new("").ok()?);
-            }
-        }
-        Some(())
+        Some(
+            self.names
+                .iter()
+                .filter_map(|name| {
+                    name.to_str()
+                        .ok()?
+                        .to_ascii_lowercase()
+                        .starts_with(&needle)
+                        .then_some((name.clone(), CString::new("").ok()?))
+                })
+                .collect::<Vec<_>>(),
+        )
     }
 
     pub fn filter_class_props_by_name(
         &self,
         class_name: &str,
         needle: &str,
-        dict: &mut crate::dictionary::dictionary_num_by_str::DictNumByStr,
-    ) -> Option<()> {
+    ) -> Option<Vec<(CString, i32)>> {
         let members = self.get_class_by_name(class_name)?;
         let needle = needle.to_ascii_lowercase();
-        for (member, index) in members {
+        Some(members.iter().filter_map(|(member, index)| {
+
             if !member.starts_with(&needle) {
-                continue;
+                return None;
             }
             let op = self.get_opcode_by_index(*index)?;
 
             if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ op.op_type == OpcodeType::Property
             {
-                continue;
+                return None;
             };
 
-            dict.add(CString::new(member.clone()).ok()?, &*op as *const _ as i32);
-        }
-        Some(())
+            Some((CString::new(member.clone()).ok()?, &*op as *const _ as i32))
+        }).collect::<Vec<_>>())
+    }
+
+    pub fn has_prop(&self, prop_name: &str) -> bool {
+        self.props.contains(&prop_name.to_ascii_lowercase())
     }
 }

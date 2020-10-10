@@ -77,12 +77,17 @@ where
                 continue;
             }
 
-            match <(T, U)>::get_key_value(v[0], v[1], self.hex_keys, &self.case_format) {
-                Some((key, value)) => self.add(key, value),
-                _ => {}
-            }
+            self.add_raw(v[0], v[1]);
         }
         Some(())
+    }
+
+    pub fn add_raw(&mut self, key: &str, value: &str) {
+        if let Some((key, value)) =
+            <(T, U)>::get_key_value(key, value, self.hex_keys, &self.case_format)
+        {
+            self.add(key, value)
+        }
     }
 
     pub fn add(&mut self, key: T, value: U) {
@@ -105,53 +110,42 @@ impl KeyValue for (CString, CString) {
         _hex_keys: bool,
         case_format: &CaseFormat,
     ) -> Option<Self> {
-        if let Ok(key) = apply_format(v0, &CaseFormat::LowerCase) {
-            if let Ok(value) = apply_format(v1, case_format) {
-                return Some((key, value));
-            }
-        }
-
-        return None;
+        let key = apply_format(v0, &CaseFormat::LowerCase)?;
+        let value = apply_format(v1, case_format)?;
+        Some((key, value))
     }
 }
 
 impl KeyValue for (i32, CString) {
     fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self> {
-        if let Ok(key) = parse_number(v0, hex_keys) {
-            if let Ok(value) = apply_format(v1, case_format) {
-                return Some((key, value));
-            }
-        }
-
-        return None;
+        let key = parse_number(v0, hex_keys)?;
+        let value = apply_format(v1, case_format)?;
+        Some((key, value))
     }
 }
 
 impl KeyValue for (CString, i32) {
     fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self> {
-        if let Ok(key) = apply_format(v1, case_format) {
-            if let Ok(value) = parse_number(v0, hex_keys) {
-                return Some((key, value));
-            }
-        }
-        return None;
+        let key = apply_format(v1, case_format)?;
+        let value = parse_number(v0, hex_keys)?;
+        Some((key, value))
     }
 }
 
-fn apply_format(s: &str, case_format: &CaseFormat) -> Result<CString, std::ffi::NulError> {
+fn apply_format(s: &str, case_format: &CaseFormat) -> Option<CString> {
     let value = match case_format {
         CaseFormat::LowerCase => s.to_ascii_lowercase(),
         CaseFormat::UpperCase => s.to_ascii_uppercase(),
         CaseFormat::NoFormat => String::from(s),
     };
-    CString::new(value)
+    CString::new(value).ok()
 }
 
-fn parse_number(s: &str, hex: bool) -> std::result::Result<i32, std::num::ParseIntError> {
+fn parse_number(s: &str, hex: bool) -> Option<i32> {
     if hex {
-        i32::from_str_radix(s, 16)
+        i32::from_str_radix(s, 16).ok()
     } else {
-        s.parse::<i32>()
+        s.parse::<i32>().ok()
     }
 }
 

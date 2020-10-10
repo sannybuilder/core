@@ -134,7 +134,11 @@ pub unsafe extern "C" fn classes_filter_enum_by_name(
     dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
-        ns.as_mut()?.filter_enum_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?, dict.as_mut()?)
+        let items = ns.as_mut()?.filter_enum_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?)?;
+        for item in items {
+            dict.as_mut()?.add(item.0, item.1)
+        }
+        Some(())
     }}
 }
 
@@ -145,7 +149,11 @@ pub unsafe extern "C" fn classes_filter_classes_by_name(
     dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
-        ns.as_mut()?.filter_classes_by_name(pchar_to_str(needle)?, dict.as_mut()?)
+        let items = ns.as_mut()?.filter_classes_by_name(pchar_to_str(needle)?)?;
+        for item in items {
+            dict.as_mut()?.add(item.0, item.1)
+        }
+        Some(())
     }}
 }
 
@@ -157,7 +165,18 @@ pub unsafe extern "C" fn classes_filter_props_by_name(
     dict: *mut crate::dictionary::dictionary_num_by_str::DictNumByStr,
 ) -> bool {
     boolclosure! {{
-        ns.as_mut()?.filter_class_props_by_name(pchar_to_str(class_name)?, pchar_to_str(needle)?, dict.as_mut()?)
+        let items = ns.as_mut()?.filter_class_props_by_name(pchar_to_str(class_name)?, pchar_to_str(needle)?)?;
+        for item in items {
+            dict.as_mut()?.add(item.0, item.1)
+        }
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_has_prop(ns: *mut Namespaces, prop_name: PChar) -> bool {
+    boolclosure! {{
+         ns.as_mut()?.has_prop(pchar_to_str(prop_name)?).then_some(())
     }}
 }
 
@@ -169,9 +188,6 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dictionary::dictionary_num_by_str::*;
-    use crate::dictionary::dictionary_str_by_str::*;
-    use crate::dictionary::ffi::*;
     use std::ffi::CString;
 
     #[test]
@@ -358,22 +374,7 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_prop2.db");
         assert!(content.is_some());
-        unsafe {
-            let d = dictionary_num_by_str_new(
-                Duplicates::Replace.into(),
-                false,
-                pchar!(""),
-                pchar!(""),
-                false,
-            );
-
-            assert!(f
-                .filter_class_props_by_name("Test", "M", d.as_mut().unwrap())
-                .is_some());
-
-            assert_eq!(dictionary_num_by_str_get_count(d), 1);
-
-            dictionary_num_by_str_free(d);
-        }
+        let items = f.filter_class_props_by_name("Test", "M");
+        assert_eq!(items.unwrap().len(), 1);
     }
 }
