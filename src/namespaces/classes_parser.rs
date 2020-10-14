@@ -27,7 +27,7 @@ pub enum ParamType<'a> {
 
 pub struct ParamTypeEnum<'a> {
     pub name: &'a str,
-    pub is_anonymous: bool,
+    // pub is_anonymous: bool,
     pub value: ParamTypeEnumValue<'a>,
 }
 
@@ -100,7 +100,7 @@ pub fn hint_anonymous_enum_type(input: &str) -> IResult<&str, ParamType> {
                 |(name, value)| ParamTypeEnum {
                     name,
                     value,
-                    is_anonymous: true,
+                    // is_anonymous: true,
                 },
             ),
         )),

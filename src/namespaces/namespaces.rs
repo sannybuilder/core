@@ -65,7 +65,7 @@ pub enum OpcodeType {
 }
 
 pub struct EnumMember {
-    pub is_anonymous: bool,
+    // pub is_anonymous: bool,
     pub name: CString,
     pub value: EnumMemberValue,
 }
@@ -185,7 +185,7 @@ impl Namespaces {
         class_name: &String,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
-        use crate::namespaces::parser::method;
+        use crate::namespaces::classes_parser::method;
 
         if line.starts_with("^") {
             return self.parse_prop(line, class_name, map);
@@ -228,7 +228,7 @@ impl Namespaces {
         class_name: &String,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
-        use crate::namespaces::parser::property;
+        use crate::namespaces::classes_parser::property;
 
         let (_, (name, variations, hint_params)) = property(line).ok()?;
         for (id, operation, prop_pos, _type, help_code) in variations {
@@ -299,10 +299,10 @@ impl Namespaces {
 
     fn parse_params(
         &mut self,
-        params: &Vec<crate::namespaces::parser::Param>,
+        params: &Vec<crate::namespaces::classes_parser::Param>,
         full_name: &String,
     ) -> Vec<OpcodeParam> {
-        use crate::namespaces::parser::{ParamType, ParamTypeEnumValue};
+        use crate::namespaces::classes_parser::{ParamType, ParamTypeEnumValue};
 
         params
             .iter()
@@ -339,7 +339,7 @@ impl Namespaces {
                                 EnumMember {
                                     name: CString::new(key).ok()?,
                                     value: member,
-                                    is_anonymous: enum_member.is_anonymous,
+                                    // is_anonymous: enum_member.is_anonymous,
                                 },
                             );
                         }
