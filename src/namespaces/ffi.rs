@@ -14,6 +14,13 @@ pub unsafe extern "C" fn classes_load_file(ns: *mut Namespaces, file_name: PChar
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_load_enum_file(ns: *mut Namespaces, file_name: PChar) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.load_enums(pchar_to_str(file_name)?)
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_opcode(
     ns: *mut Namespaces,
     opcode: u16,
@@ -127,14 +134,14 @@ pub unsafe extern "C" fn classes_get_enum_value_i32_by_name(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn classes_filter_enum_by_name(
+pub unsafe extern "C" fn classes_filter_enum_members_by_name(
     ns: *mut Namespaces,
     enum_name: PChar,
     needle: PChar,
     dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
-        let items = ns.as_mut()?.filter_enum_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?)?;
+        let items = ns.as_mut()?.filter_enum_members_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?)?;
         for item in items {
             dict.as_mut()?.add(item.0, item.1)
         }
@@ -150,6 +157,21 @@ pub unsafe extern "C" fn classes_filter_classes_by_name(
 ) -> bool {
     boolclosure! {{
         let items = ns.as_mut()?.filter_classes_by_name(pchar_to_str(needle)?)?;
+        for item in items {
+            dict.as_mut()?.add(item.0, item.1)
+        }
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_filter_enums_by_name(
+    ns: *mut Namespaces,
+    needle: PChar,
+    dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
+) -> bool {
+    boolclosure! {{
+        let items = ns.as_mut()?.filter_enums_by_name(pchar_to_str(needle)?)?;
         for item in items {
             dict.as_mut()?.add(item.0, item.1)
         }
@@ -376,5 +398,30 @@ mod tests {
         assert!(content.is_some());
         let items = f.filter_class_props_by_name("Test", "M");
         assert_eq!(items.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_enum_hole() {
+        let mut f = Namespaces::new();
+        let content = f.load_classes("src/namespaces/test/classes_enum_hole.db");
+        assert!(content.is_some());
+        let value = f.get_enum_value_by_name("Test.Method.0", "a");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(0));
+        let value = f.get_enum_value_by_name("Test.Method.0", "b");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(2));
+
+        let value =
+            f.get_anonymous_enum_name_by_member_value("Test.Method.0", &EnumMemberValue::Int(1));
+        assert!(value.is_none());
+    }
+
+    #[test]
+    fn test_load_enums() {
+        let mut f = Namespaces::new();
+        let content = f.load_enums("src/namespaces/test/enums_1.txt");
+        assert!(content.is_some());
+
+        let value = f.get_enum_value_by_name("PedType", "Medic");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(18));
     }
 }

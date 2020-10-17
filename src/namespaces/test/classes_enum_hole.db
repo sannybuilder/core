@@ -1,0 +1,17 @@
+#classeslist
+
+test
+
+#Classes
+
+
+$Test
+$BEGIN
+
+
+Method, 000A, 0, 100,("Param:^a^ ^b")
+
+$END
+
+
+#eof

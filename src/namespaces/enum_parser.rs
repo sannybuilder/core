@@ -34,15 +34,15 @@ use nom::IResult;
 
 #[derive(Debug, PartialEq)]
 pub struct Enum<'a> {
-    name: &'a str,
-    items: EnumItems<'a>,
+    pub name: &'a str,
+    pub items: EnumItems<'a>,
 }
 
 type IntEnum<'a> = Vec<(&'a str, i32)>;
 type TextEnum<'a> = Vec<(&'a str, &'a str)>;
 
 #[derive(Debug, PartialEq)]
-enum EnumItems<'a> {
+pub enum EnumItems<'a> {
     Int(IntEnum<'a>),
     Text(TextEnum<'a>),
 }
@@ -171,7 +171,6 @@ fn enum_items(input: &str) -> IResult<&str, EnumItems> {
 }
 
 fn enum_name(input: &str) -> IResult<&str, &str> {
-    println!("{}", input);
     terminated(identifier, delimited(space0, line_ending, space0))(input)
 }
 

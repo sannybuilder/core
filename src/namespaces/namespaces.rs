@@ -12,13 +12,14 @@ static CID: usize = 20;
 pub struct Namespaces {
     names: Vec<CString>, // case-preserved
     props: Vec<String>,
+    enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
-    map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
+    pub map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
 }
 
 #[repr(C)]
@@ -39,19 +40,22 @@ pub struct Opcode {
 #[derive(Clone)]
 pub struct OpcodeParam {
     pub is_enum: bool,
+    pub is_anonymous_enum: bool,
     pub name: CString,
     pub _type: CString,
 }
 
 impl<'a> From<&OpcodeParam> for String {
     fn from(s: &OpcodeParam) -> String {
+        let name = s.name.to_str().unwrap_or("");
+        let _type = s._type.to_str().unwrap_or("");
         format!(
             "\"{}: {}\"",
-            s.name.to_str().unwrap_or(""),
-            if s.is_enum {
+            name,
+            if s.is_enum && s.is_anonymous_enum {
                 "Extended"
             } else {
-                s._type.to_str().unwrap_or("")
+                _type
             }
         )
     }
@@ -64,12 +68,13 @@ pub enum OpcodeType {
     Property,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct EnumMember {
-    // pub is_anonymous: bool,
     pub name: CString,
     pub value: EnumMemberValue,
 }
 
+#[derive(Debug, PartialEq)]
 pub enum EnumMemberValue {
     Int(i32),
     Float(f32),
@@ -104,6 +109,7 @@ impl Namespaces {
             names: vec![],
             props: vec![],
             opcodes: vec![],
+            enums: vec![],
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
@@ -113,6 +119,45 @@ impl Namespaces {
     pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_classes(content)
+    }
+
+    // todo: refactor to use with anonymous enums
+    pub fn load_enums<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        use crate::namespaces::enum_parser::{parse_enums, EnumItems};
+
+        let content = std::fs::read_to_string(file_name).ok()?;
+        let (_, enums) = parse_enums(&content).ok()?;
+        for e in enums {
+            let mut members = HashMap::new();
+            match e.items {
+                EnumItems::Int(items) => {
+                    for (name, value) in items {
+                        members.insert(
+                            name.to_ascii_lowercase(),
+                            EnumMember {
+                                name: CString::new(name).ok()?,
+                                value: EnumMemberValue::Int(value),
+                            },
+                        );
+                    }
+                }
+                EnumItems::Text(items) => {
+                    for (name, value) in items {
+                        members.insert(
+                            name.to_ascii_lowercase(),
+                            EnumMember {
+                                name: CString::new(name).ok()?,
+                                value: EnumMemberValue::Text(String::from(value)),
+                            },
+                        );
+                    }
+                }
+            }
+
+            self.enums.push(CString::new(e.name).ok()?);
+            self.map_enum.insert(e.name.to_ascii_lowercase(), members);
+        }
+        Some(())
     }
 
     fn parse_classes<'a>(&mut self, content: String) -> Option<()> {
@@ -208,6 +253,7 @@ impl Namespaces {
             operation: CString::new("").ok()?,
             prop_pos: 0,
         });
+        self.props.push(name.to_ascii_lowercase());
         map.insert(name.to_ascii_lowercase(), op_index);
         Some(())
     }
@@ -309,16 +355,25 @@ impl Namespaces {
             .enumerate()
             .filter_map(|(param_index, param)| -> Option<OpcodeParam> {
                 match &param._type {
-                    ParamType::Text(_type) => Some(OpcodeParam {
-                        is_enum: false,
-                        name: CString::new(param.name).ok()?,
-                        _type: CString::new(*_type).ok()?,
-                    }),
+                    ParamType::Text(_type) => {
+                        let is_enum = self.get_enum_by_name(param.name).is_some();
+                        Some(OpcodeParam {
+                            is_enum,
+                            is_anonymous_enum: !is_enum,
+                            name: CString::new(param.name).ok()?,
+                            _type: CString::new(*_type).ok()?,
+                        })
+                    }
                     ParamType::Enum(enum_members) => {
                         let mut index = 0;
                         let enum_name = format!("{}.{}", full_name, param_index);
                         let mut members = HashMap::new();
                         for enum_member in enum_members {
+                            // empty name indicates a hole in anonymous enum to skip certain index
+                            if enum_member.name.trim().len() == 0 {
+                                index += 1;
+                                continue;
+                            }
                             let member = match enum_member.value {
                                 ParamTypeEnumValue::Empty => EnumMemberValue::Int(index),
                                 ParamTypeEnumValue::Text(text) => {
@@ -333,13 +388,11 @@ impl Namespaces {
                             };
                             index += 1;
 
-                            let key = enum_member.name;
                             members.insert(
-                                key.to_ascii_lowercase(),
+                                enum_member.name.to_ascii_lowercase(),
                                 EnumMember {
-                                    name: CString::new(key).ok()?,
+                                    name: CString::new(enum_member.name).ok()?,
                                     value: member,
-                                    // is_anonymous: enum_member.is_anonymous,
                                 },
                             );
                         }
@@ -348,6 +401,7 @@ impl Namespaces {
                             .insert(enum_name.to_ascii_lowercase(), members);
                         Some(OpcodeParam {
                             is_enum: true,
+                            is_anonymous_enum: true,
                             name: CString::new(param.name).ok()?,
                             _type: CString::new(enum_name).ok()?,
                         })
@@ -494,7 +548,23 @@ impl Namespaces {
         }
     }
 
-    pub fn filter_enum_by_name(
+    pub fn filter_enums_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
+        let needle = needle.to_ascii_lowercase();
+        Some(
+            self.enums
+                .iter()
+                .filter_map(|name| {
+                    name.to_str()
+                        .ok()?
+                        .to_ascii_lowercase()
+                        .starts_with(&needle)
+                        .then_some((name.clone(), CString::new("").ok()?))
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    pub fn filter_enum_members_by_name(
         &self,
         enum_name: &str,
         needle: &str,
