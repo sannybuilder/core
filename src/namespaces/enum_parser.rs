@@ -171,7 +171,7 @@ fn enum_items(input: &str) -> IResult<&str, EnumItems> {
 }
 
 fn enum_name(input: &str) -> IResult<&str, &str> {
-    terminated(identifier, delimited(space0, line_ending, space0))(input)
+    terminated(identifier, delimited(space0, line_ending, multispace0))(input)
 }
 
 fn enum_item(input: &str) -> IResult<&str, EnumItemRaw> {
@@ -181,7 +181,7 @@ fn enum_item(input: &str) -> IResult<&str, EnumItemRaw> {
             delimited(
                 space0,
                 alt((value((), line_ending), value((), char(',')))),
-                space0,
+                multispace0,
             ),
         ),
         |(name, value)| EnumItemRaw { name, value },

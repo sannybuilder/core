@@ -104,7 +104,7 @@ pub unsafe extern "C" fn classes_get_enum_name_by_value_i32(
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{
-        *out = ns.as_mut()?.get_anonymous_enum_name_by_member_value(
+        *out = ns.as_mut()?.get_enum_member_name_by_value(
             pchar_to_str(enum_name)?,
             &EnumMemberValue::Int(value),
         )?.as_ptr();
@@ -314,25 +314,14 @@ mod tests {
             CString::new("\"p: Integer\" \"Value: Extended\"").unwrap()
         );
 
-        assert!(!f.get_opcode_param_at(0, 0).unwrap().is_enum);
-        assert!(f.get_opcode_param_at(0, 1).unwrap().is_enum);
-
         let enum_val = f.get_enum_value_by_name("TeST.Method.1", "b").unwrap();
         assert!(match enum_val {
             EnumMemberValue::Int(10) => true,
             _ => false,
         });
 
-        let enum_val = f
-            .get_anonymous_enum_value_by_member_name(0, 1, "B")
-            .unwrap();
-        assert!(match enum_val {
-            EnumMemberValue::Int(10) => true,
-            _ => false,
-        });
-
         assert_eq!(
-            f.get_anonymous_enum_name_by_member_value("TeST.Method.1", &EnumMemberValue::Int(10)),
+            f.get_enum_member_name_by_value("TeST.Method.1", &EnumMemberValue::Int(10)),
             Some(&CString::new("B").unwrap())
         );
 
@@ -368,8 +357,7 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_prop2.db");
         assert!(content.is_some());
 
-        let enum_val =
-            f.get_anonymous_enum_name_by_member_value("TEST.HEALTH.0", &EnumMemberValue::Int(11));
+        let enum_val = f.get_enum_member_name_by_value("TEST.HEALTH.0", &EnumMemberValue::Int(11));
         assert!(match enum_val {
             Some(x) => {
                 let name = x.clone().into_string().unwrap();
@@ -382,13 +370,7 @@ mod tests {
         assert!(match enum_val {
             Some(&EnumMemberValue::Int(11)) => true,
             _ => false,
-        });
-
-        let enum_val = f.get_anonymous_enum_value_by_member_name(0, 0, "PEDTYPE11");
-        assert!(match enum_val {
-            Some(&EnumMemberValue::Int(11)) => true,
-            _ => false,
-        });
+        })
     }
 
     #[test]
@@ -410,8 +392,7 @@ mod tests {
         let value = f.get_enum_value_by_name("Test.Method.0", "b");
         assert_eq!(value.unwrap(), &EnumMemberValue::Int(2));
 
-        let value =
-            f.get_anonymous_enum_name_by_member_value("Test.Method.0", &EnumMemberValue::Int(1));
+        let value = f.get_enum_member_name_by_value("Test.Method.0", &EnumMemberValue::Int(1));
         assert!(value.is_none());
     }
 
@@ -423,5 +404,11 @@ mod tests {
 
         let value = f.get_enum_value_by_name("PedType", "Medic");
         assert_eq!(value.unwrap(), &EnumMemberValue::Int(18));
+
+        let value = f.get_enum_value_by_name("WeaponType", "Parachute");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(46));
+
+        let value = f.get_enum_value_by_name("CarMission", "Cruise");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(1));
     }
 }

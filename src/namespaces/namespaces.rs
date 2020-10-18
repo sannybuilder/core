@@ -356,7 +356,7 @@ impl Namespaces {
             .filter_map(|(param_index, param)| -> Option<OpcodeParam> {
                 match &param._type {
                     ParamType::Text(_type) => {
-                        let is_enum = self.get_enum_by_name(param.name).is_some();
+                        let is_enum = self.get_enum_by_name(_type).is_some();
                         Some(OpcodeParam {
                             is_enum,
                             is_anonymous_enum: !is_enum,
@@ -463,14 +463,6 @@ impl Namespaces {
         self.map_enum.get(&name.to_ascii_lowercase())
     }
 
-    pub fn get_opcode_param_at(&self, op_index: usize, param_index: usize) -> Option<&OpcodeParam> {
-        Some(
-            self.get_opcode_by_index(op_index)?
-                .params
-                .get(param_index)?,
-        )
-    }
-
     pub fn get_enum_value_by_name(
         &self,
         enum_name: &str,
@@ -492,7 +484,7 @@ impl Namespaces {
      * From now on, those enums should be decompiled using namespace
      * class.member(0, 0, BodyPart.Torso)
      */
-    pub fn get_anonymous_enum_name_by_member_value(
+    pub fn get_enum_member_name_by_value(
         &self,
         enum_name: &str,
         value: &EnumMemberValue,
@@ -515,20 +507,6 @@ impl Namespaces {
                     _ => None,
                 },
             })
-    }
-
-    pub fn get_anonymous_enum_value_by_member_name(
-        &self,
-        op_index: usize,
-        param_index: usize,
-        member_name: &str,
-    ) -> Option<&EnumMemberValue> {
-        let param = self.get_opcode_param_at(op_index, param_index)?;
-        if param.is_enum {
-            self.get_enum_value_by_name(&param._type.to_str().ok()?, member_name)
-        } else {
-            None
-        }
     }
 
     pub fn get_class_id_by_name(&self, class_name: &str) -> Option<i32> {
