@@ -39,10 +39,11 @@ pub struct Opcode {
 #[repr(C)]
 #[derive(Clone)]
 pub struct OpcodeParam {
-    pub is_enum: bool,
+    pub is_named_enum: bool,
     pub is_anonymous_enum: bool,
     pub name: CString,
     pub _type: CString,
+    pub _anonymous_type: CString,
 }
 
 impl<'a> From<&OpcodeParam> for String {
@@ -52,7 +53,7 @@ impl<'a> From<&OpcodeParam> for String {
         format!(
             "\"{}: {}\"",
             name,
-            if s.is_enum && s.is_anonymous_enum {
+            if s.is_named_enum && !s.is_anonymous_enum {
                 "Extended"
             } else {
                 _type
@@ -161,6 +162,8 @@ impl Namespaces {
     }
 
     fn parse_classes<'a>(&mut self, content: String) -> Option<()> {
+        use crate::namespaces::classes_parser::{deprecated_anonymous_enum, ParamType};
+
         let lines = content
             .lines()
             .map(|line| line.trim())
@@ -184,7 +187,27 @@ impl Namespaces {
                 names_str.push(String::from(line));
                 continue;
             }
-            if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
+
+            if line.eq_ignore_ascii_case("#deprecated_enums") {
+                while let Some(line) = line_iter.next() {
+                    if line.starts_with(|c| c == '#' || c == '$') {
+                        if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
+                            return Some(());
+                        }
+                        break;
+                    }
+                    if line.trim().is_empty() {
+                        continue;
+                    }
+                    let (_, e) = deprecated_anonymous_enum(line).ok()?;
+                    match e._type {
+                        ParamType::Enum(values) => {
+                            self.add_deprecated_enums(e.name, &values);
+                        }
+                        _ => {}
+                    }
+                }
+            } else if !line.eq_ignore_ascii_case("#classes") || self.names.len() == 0 {
                 return Some(());
             }
             break;
@@ -348,67 +371,87 @@ impl Namespaces {
         params: &Vec<crate::namespaces::classes_parser::Param>,
         full_name: &String,
     ) -> Vec<OpcodeParam> {
-        use crate::namespaces::classes_parser::{ParamType, ParamTypeEnumValue};
+        use crate::namespaces::classes_parser::ParamType;
 
         params
             .iter()
             .enumerate()
             .filter_map(|(param_index, param)| -> Option<OpcodeParam> {
+                let anonymous_enum_name = format!("{}.{}", full_name, param_index);
                 match &param._type {
                     ParamType::Text(_type) => {
-                        let is_enum = self.get_enum_by_name(_type).is_some();
+                        let is_named_enum = self.get_enum_by_name(_type).is_some();
+                        let is_anonymous_enum =
+                            self.get_enum_by_name(&anonymous_enum_name).is_some(); // deprecated_enums.txt
                         Some(OpcodeParam {
-                            is_enum,
-                            is_anonymous_enum: !is_enum,
+                            is_named_enum,
+                            is_anonymous_enum,
                             name: CString::new(param.name).ok()?,
                             _type: CString::new(*_type).ok()?,
+                            _anonymous_type: if is_anonymous_enum {
+                                CString::new(anonymous_enum_name).ok()?
+                            } else {
+                                CString::new("").ok()?
+                            },
                         })
                     }
+
+                    // deprecated syntax, anonymous enums ("extended")
                     ParamType::Enum(enum_members) => {
-                        let mut index = 0;
-                        let enum_name = format!("{}.{}", full_name, param_index);
-                        let mut members = HashMap::new();
-                        for enum_member in enum_members {
-                            // empty name indicates a hole in anonymous enum to skip certain index
-                            if enum_member.name.trim().len() == 0 {
-                                index += 1;
-                                continue;
-                            }
-                            let member = match enum_member.value {
-                                ParamTypeEnumValue::Empty => EnumMemberValue::Int(index),
-                                ParamTypeEnumValue::Text(text) => {
-                                    match i32::from_str_radix(text, 10) {
-                                        Ok(v) => {
-                                            index = v;
-                                            EnumMemberValue::Int(v)
-                                        }
-                                        Err(_) => EnumMemberValue::Text(text.to_string()),
-                                    }
-                                }
-                            };
-                            index += 1;
-
-                            members.insert(
-                                enum_member.name.to_ascii_lowercase(),
-                                EnumMember {
-                                    name: CString::new(enum_member.name).ok()?,
-                                    value: member,
-                                },
-                            );
-                        }
-
-                        self.map_enum
-                            .insert(enum_name.to_ascii_lowercase(), members);
+                        self.add_deprecated_enums(&anonymous_enum_name, enum_members);
                         Some(OpcodeParam {
-                            is_enum: true,
+                            is_named_enum: false,
                             is_anonymous_enum: true,
                             name: CString::new(param.name).ok()?,
-                            _type: CString::new(enum_name).ok()?,
+                            _type: CString::new("").ok()?,
+                            _anonymous_type: CString::new(anonymous_enum_name).ok()?,
                         })
                     }
                 }
             })
             .collect::<Vec<_>>()
+    }
+
+    fn add_deprecated_enums(
+        &mut self,
+        anonymous_enum_name: &str,
+        enum_members: &Vec<crate::namespaces::classes_parser::ParamTypeEnum>,
+    ) -> Option<()> {
+        use crate::namespaces::classes_parser::ParamTypeEnumValue;
+        let mut index = 0;
+
+        let mut members = HashMap::new();
+        for enum_member in enum_members {
+            // empty name indicates a hole in anonymous enum to skip certain index
+            if enum_member.name.trim().len() == 0 {
+                index += 1;
+                continue;
+            }
+            let member = match enum_member.value {
+                ParamTypeEnumValue::Empty => EnumMemberValue::Int(index),
+                ParamTypeEnumValue::Text(text) => match i32::from_str_radix(text, 10) {
+                    Ok(v) => {
+                        index = v;
+                        EnumMemberValue::Int(v)
+                    }
+                    Err(_) => EnumMemberValue::Text(text.to_string()),
+                },
+            };
+            index += 1;
+
+            members.insert(
+                enum_member.name.to_ascii_lowercase(),
+                EnumMember {
+                    name: CString::new(enum_member.name).ok()?,
+                    value: member,
+                },
+            );
+        }
+
+        self.map_enum
+            .insert(anonymous_enum_name.to_ascii_lowercase(), members);
+
+        Some(())
     }
 
     fn register_opcode(&mut self, opcode: Opcode) -> usize {

@@ -1,0 +1,28 @@
+
+#classeslist
+
+TEST
+
+#DEPRECATED_ENUMS
+Actor.Create.1 = ^Player1^Player2^Player3^Player4^CivMale^CivFemale^Cop^Gang1^Gang2^Gang3^Gang4^Gang5^Gang6^Gang7^Gang8^Gang9^Gang10^Dealer^Medic^Fireman^Criminal^ ^Prostitute^Special^Mission1^Mission2^Mission3^Mission4^Mission5^Mission6^Mission7^Mission8
+Actor.CreateAsDriver.1 = ^Player1^Player2^Player3^Player4^CivMale^CivFemale^Cop^Gang1^Gang2^Gang3^Gang4^Gang5^Gang6^Gang7^Gang8^Gang9^Gang10^Dealer^Medic^Fireman^Criminal^ ^Prostitute^Special^Mission1^Mission2^Mission3^Mission4^Mission5^Mission6^Mission7^Mission8
+Actor.CreateAsPassenger.1 = ^Player1^Player2^Player3^Player4^CivMale^CivFemale^Cop^Gang1^Gang2^Gang3^Gang4^Gang5^Gang6^Gang7^Gang8^Gang9^Gang10^Dealer^Medic^Fireman^Criminal^ ^Prostitute^Special^Mission1^Mission2^Mission3^Mission4^Mission5^Mission6^Mission7^Mission8
+Actor.SetWeaponAmmo.1 = ^Pistol=22^Silenced=23^DesertEagle=24^Shotgun=25^Sawnoff=26^CombatShotgun=27^MicroUzi=28^MP5=29^Tec9=32^AK47=30^M4=31^Rifle=33^SniperRifle=34^RPG=35^HeatSeek=36^FlameThrower=37^Minigun=38^Camera=43^Grenede=16^TearGas=17^Molotov=18^SachetCharges=39
+Actor.GiveWeaponAndAmmo.1 = ^Unarmed^BrassKnuckles^GolfClub^NightStick^Knife^BaseballBat^Shovel^PoolCue^Katana^Chainsaw^PurpleDildo^WhiteDildo^LongWhiteDildo^WhiteDildo2^Flowers^Cane^Grenades^TearGas^Molotov^Pistol=22^Silenced^DesertEagle^Shotgun^Sawnoff^CombatShotgun^MicroUzi^MP5^AK47^M4^Tec9^Rifle^SniperRifle^RPG^HeatSeek^FlameThrower^Minigun^SachetCharges^Detonator^SprayPaint^FireExtinguisher^Camera^NightvisionGoggles^ThermalGoggles^Parachute
+Car.SetDriverBehaviour.1 = ^Nowhere^FollowRoad^KillThePlayer^DriveToPlayer=4^IgnoreRoadPaths=8
+Player.SetClothes.3 = ^Torso^Head^Legs^Shoes^Special=17
+File.Seek.2 = ^SEEK_SET^SEEK_CUR^SEEK_END
+Audiostream.PerformAction.1 = ^STOP^PLAY^PAUSE^RESUME
+
+#Classes
+
+
+$test
+$BEGIN
+
+m,0001,0,0,("p%b")
+
+$END
+
+
+#eof

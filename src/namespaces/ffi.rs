@@ -301,6 +301,15 @@ mod tests {
     }
 
     #[test]
+    fn test_deprecated() {
+        let mut f = Namespaces::new();
+        let content = f.load_classes("src/namespaces/test/classes_deprecated.db");
+        assert!(content.is_some());
+        assert_eq!(f.map_enum.len(), 9);
+        assert_eq!(f.op_count(), 1);
+    }
+
+    #[test]
     fn test_enum() {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_prop_hint.db");

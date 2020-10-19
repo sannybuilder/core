@@ -159,6 +159,17 @@ pub fn property(
     ))(input)
 }
 
+pub fn deprecated_anonymous_enum(input: &str) -> IResult<&str, Param> {
+    all_consuming(map(
+        tuple((
+            delimited(space0, is_not(" \t\r\n"), space0),
+            char('='),
+            delimited(space0, hint_anonymous_enum_type, space0),
+        )),
+        |(name, _, _type)| Param { name, _type },
+    ))(input)
+}
+
 pub fn is_hex_digit(c: char) -> bool {
     c.is_digit(16)
 }
