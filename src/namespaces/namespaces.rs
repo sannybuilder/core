@@ -53,7 +53,7 @@ impl<'a> From<&OpcodeParam> for String {
         format!(
             "\"{}: {}\"",
             name,
-            if s.is_named_enum && !s.is_anonymous_enum {
+            if s.is_anonymous_enum && !s.is_named_enum {
                 "Extended"
             } else {
                 _type
