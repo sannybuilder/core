@@ -296,8 +296,8 @@ mod tests {
         let mut f = Namespaces::new();
         let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_some());
-        assert_eq!(f.classes_count(), 28);
-        assert_eq!(f.op_count(), 971); //wrong
+        assert_eq!(f.classes_count(), 11);
+        assert_eq!(f.op_count(), 187);
     }
 
     #[test]
