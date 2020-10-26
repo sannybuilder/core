@@ -132,7 +132,7 @@ impl KeyValue for (CString, i32) {
     }
 }
 
-fn apply_format(s: &str, case_format: &CaseFormat) -> Option<CString> {
+pub fn apply_format(s: &str, case_format: &CaseFormat) -> Option<CString> {
     let value = match case_format {
         CaseFormat::LowerCase => s.to_ascii_lowercase(),
         CaseFormat::UpperCase => s.to_ascii_uppercase(),

@@ -36,11 +36,13 @@ pub unsafe extern "C" fn dictionary_num_by_str_load_file(
 pub unsafe extern "C" fn dictionary_num_by_str_add(
     dict: *mut DictNumByStr,
     key: PChar,
-    value: PChar,
+    value: i32,
 ) -> bool {
     boolclosure! {{
-       dict.as_mut()?.add_raw(pchar_to_str(key)?, pchar_to_str(value)?);
-       Some(())
+        let d = dict.as_mut()?;
+        let key = apply_format(pchar_to_str(key)?, &d.case_format)?;
+        d.add(key, value);
+        Some(())
     }}
 }
 

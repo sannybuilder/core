@@ -36,23 +36,25 @@ pub unsafe extern "C" fn dictionary_str_by_num_load_file(
 #[no_mangle]
 pub unsafe extern "C" fn dictionary_str_by_num_add(
     dict: *mut DictStrByNum,
-    key: PChar,
+    key: i32,
     value: PChar,
 ) -> bool {
     boolclosure! {{
-       dict.as_mut()?.add_raw(pchar_to_str(key)?, pchar_to_str(value)?);
-       Some(())
+        let d = dict.as_mut()?;
+        let value = apply_format(pchar_to_str(value)?, &d.case_format)?;
+        d.add(key, value);
+        Some(())
     }}
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn dictionary_str_by_num_find(
     dict: *mut DictStrByNum,
-    id: i32,
+    key: i32,
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{
-       *out = dict.as_mut()?.map.get(&id)?.as_ptr();
+       *out = dict.as_mut()?.map.get(&key)?.as_ptr();
        Some(())
     }}
 }
