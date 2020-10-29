@@ -149,51 +149,76 @@ fn parse_number(s: &str, hex: bool) -> Option<i32> {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Duplicates {
-    Replace,
-    Ignore,
+    Replace, // 0
+    Ignore,  // 1
 }
 
 impl From<u8> for Duplicates {
     fn from(i: u8) -> Self {
         match i {
-            1 => Duplicates::Replace,
+            0 => Duplicates::Replace,
             _ => Duplicates::Ignore,
         }
     }
 }
 
-impl Into<u8> for Duplicates {
-    fn into(self) -> u8 {
-        match self {
-            Duplicates::Ignore => 0,
-            Duplicates::Replace => 1,
+impl From<Duplicates> for u8 {
+    fn from(f: Duplicates) -> Self {
+        match f {
+            Duplicates::Replace => 0,
+            Duplicates::Ignore => 1,
         }
     }
 }
-
+#[derive(Debug, PartialEq)]
 pub enum CaseFormat {
-    NoFormat,
-    UpperCase,
-    LowerCase,
+    NoFormat,  // 0
+    UpperCase, // 1
+    LowerCase, // 2
 }
 
 impl From<u8> for CaseFormat {
     fn from(i: u8) -> Self {
         match i {
-            1 => CaseFormat::LowerCase,
-            2 => CaseFormat::UpperCase,
+            1 => CaseFormat::UpperCase,
+            2 => CaseFormat::LowerCase,
             _ => CaseFormat::NoFormat,
         }
     }
 }
 
-impl Into<u8> for CaseFormat {
-    fn into(self) -> u8 {
-        match self {
+impl From<CaseFormat> for u8 {
+    fn from(f: CaseFormat) -> Self {
+        match f {
             CaseFormat::NoFormat => 0,
-            CaseFormat::LowerCase => 1,
-            CaseFormat::UpperCase => 2,
+            CaseFormat::UpperCase => 1,
+            CaseFormat::LowerCase => 2,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_case_format() {
+        assert_eq!(CaseFormat::from(0), CaseFormat::NoFormat);
+        assert_eq!(CaseFormat::from(1), CaseFormat::UpperCase);
+        assert_eq!(CaseFormat::from(2), CaseFormat::LowerCase);
+
+        assert_eq!(u8::from(CaseFormat::NoFormat), 0);
+        assert_eq!(u8::from(CaseFormat::UpperCase), 1);
+        assert_eq!(u8::from(CaseFormat::LowerCase), 2);
+    }
+
+    #[test]
+    fn test_duplicates() {
+        assert_eq!(Duplicates::from(0), Duplicates::Replace);
+        assert_eq!(Duplicates::from(1), Duplicates::Ignore);
+
+        assert_eq!(u8::from(Duplicates::Replace), 0);
+        assert_eq!(u8::from(Duplicates::Ignore), 1);
     }
 }
