@@ -1,5 +1,5 @@
 [package]
-name = "sanny-builder-core"
+name = "sanny_builder_core"
 version = "0.1.0"
 authors = ["Seemann <mail@sannybuilder.com>"]
 edition = "2018"
