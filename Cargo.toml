@@ -8,7 +8,7 @@ edition = "2018"
 
 [lib]
 name = "core"
-crate-type = ["cdylib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 libc = "0.2.79"
