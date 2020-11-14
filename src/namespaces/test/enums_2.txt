@@ -1,0 +1,7 @@
+enum Int
+  X, Y
+end
+
+enum String
+  X, Y = "Y"
+end

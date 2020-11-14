@@ -420,4 +420,17 @@ mod tests {
         let value = f.get_enum_value_by_name("CarMission", "Cruise");
         assert_eq!(value.unwrap(), &EnumMemberValue::Int(1));
     }
+
+    #[test]
+    fn test_enums2() {
+        let mut f = Namespaces::new();
+        let content = f.load_enums("src/namespaces/test/enums_2.txt");
+        assert!(content.is_some());
+
+        let value = f.get_enum_value_by_name("Int", "X");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Int(0));
+
+        let value = f.get_enum_value_by_name("String", "X");
+        assert_eq!(value.unwrap(), &EnumMemberValue::Text(String::from("X")));
+    }
 }
