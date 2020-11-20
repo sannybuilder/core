@@ -14,7 +14,7 @@ pub extern "C" fn dictionary_num_by_str_new(
 ) -> *mut DictNumByStr {
     ptr_new(Dict::new(
         duplicates.into(),
-        CaseFormat::NoFormat,
+        CaseFormat::LowerCase,
         pchar_to_string(comments).unwrap_or(String::new()),
         pchar_to_string(delimiters).unwrap_or(String::new()),
         trim,
@@ -53,7 +53,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_find(
     out: *mut i32,
 ) -> bool {
     boolclosure! {{
-        let key = CString::new(pchar_to_str(key)?).ok()?;
+        let key = CString::new(pchar_to_str(key)?.to_ascii_lowercase()).ok()?;
         *out = *dict.as_mut()?.map.get(&key)?;
         Some(())
     }}
@@ -128,7 +128,7 @@ mod tests {
 
             assert_eq!(dictionary_num_by_str_get_count(f), 23);
             let mut i = 0;
-            assert!(dictionary_num_by_str_find(f, pchar!("wait"), &mut i));
+            assert!(dictionary_num_by_str_find(f, pchar!("Wait"), &mut i));
             assert_eq!(i, 1);
             i = -1;
             assert!(!dictionary_num_by_str_find(f, pchar!(""), &mut i));
