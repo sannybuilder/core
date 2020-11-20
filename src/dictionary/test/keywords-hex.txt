@@ -1,4 +1,4 @@
-0001=wait
+0001=WaIt
 0002=goto
 0002=jump
 0003=shake_camera

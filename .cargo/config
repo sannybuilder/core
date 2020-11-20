@@ -2,3 +2,6 @@
 [build]
 target = "i686-pc-windows-msvc"
 out-dir = "..\\..\\exe\\lib"
+
+[alias]
+b = "build -Z unstable-options"
