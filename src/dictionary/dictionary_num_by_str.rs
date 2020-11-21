@@ -40,8 +40,9 @@ pub unsafe extern "C" fn dictionary_num_by_str_add(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format(pchar_to_str(key)?, &d.case_format)?;
-        d.add(key, value);
+        let fmt_key = apply_format(pchar_to_str(key)?, &d.case_format)?;
+        let unfmt_key = apply_format(pchar_to_str(key)?, &CaseFormat::NoFormat)?;
+        d.add(fmt_key, value, unfmt_key);
         Some(())
     }}
 }
@@ -67,8 +68,8 @@ pub unsafe extern "C" fn dictionary_num_by_str_get_entry(
     out_value: *mut i32,
 ) -> bool {
     boolclosure! {{
-        let (key, value) = dict.as_mut()?.map.iter().nth(index)?;
-        *out_key = key.as_ptr();
+        let (_, value) = dict.as_mut()?.map.iter().nth(index)?;
+        *out_key = dict.as_mut()?.keys.iter().nth(index)?.as_ptr();
         *out_value = *value;
         Some(())
     }}
@@ -107,6 +108,27 @@ mod tests {
                 dictionary_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords.txt"));
             assert!(loaded);
             assert_eq!(dictionary_num_by_str_get_count(f), 2);
+        }
+    }
+
+    #[test]
+    fn test_dictionary_num_by_str_keys() {
+        unsafe {
+            let f = dictionary_num_by_str_new(
+                Duplicates::Replace.into(),
+                true,
+                pchar!(";"),
+                pchar!(",="),
+                true,
+            );
+
+            dictionary_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords-hex.txt"));
+            let p = f.as_mut().unwrap();
+
+            let key = p.keys.get(0).unwrap();
+            assert_eq!(key.to_str().unwrap(), "WaIt");
+
+            assert_eq!(p.keys.len(), p.map.len());
         }
     }
 

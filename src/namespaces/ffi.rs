@@ -143,7 +143,7 @@ pub unsafe extern "C" fn classes_filter_enum_members_by_name(
     boolclosure! {{
         let items = ns.as_mut()?.filter_enum_members_by_name(pchar_to_str(enum_name)?, pchar_to_str(needle)?)?;
         for item in items {
-            dict.as_mut()?.add(item.0, item.1)
+            dict.as_mut()?.add(item.0.clone(), item.1, item.0)
         }
         Some(())
     }}
@@ -158,7 +158,7 @@ pub unsafe extern "C" fn classes_filter_classes_by_name(
     boolclosure! {{
         let items = ns.as_mut()?.filter_classes_by_name(pchar_to_str(needle)?)?;
         for item in items {
-            dict.as_mut()?.add(item.0, item.1)
+            dict.as_mut()?.add(item.0.clone(), item.1, item.0)
         }
         Some(())
     }}
@@ -173,7 +173,7 @@ pub unsafe extern "C" fn classes_filter_enums_by_name(
     boolclosure! {{
         let items = ns.as_mut()?.filter_enums_by_name(pchar_to_str(needle)?)?;
         for item in items {
-            dict.as_mut()?.add(item.0, item.1)
+            dict.as_mut()?.add(item.0.clone(), item.1, item.0)
         }
         Some(())
     }}
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn classes_filter_props_by_name(
     boolclosure! {{
         let items = ns.as_mut()?.filter_class_props_by_name(pchar_to_str(class_name)?, pchar_to_str(needle)?)?;
         for item in items {
-            dict.as_mut()?.add(item.0, item.1)
+            dict.as_mut()?.add(item.0.clone(), item.1, item.0)
         }
         Some(())
     }}

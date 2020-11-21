@@ -42,7 +42,7 @@ pub unsafe extern "C" fn dictionary_str_by_num_add(
     boolclosure! {{
         let d = dict.as_mut()?;
         let value = apply_format(pchar_to_str(value)?, &d.case_format)?;
-        d.add(key, value);
+        d.add(key, value, CString::new("").ok()?);
         Some(())
     }}
 }

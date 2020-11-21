@@ -65,8 +65,8 @@ pub unsafe extern "C" fn dictionary_str_by_str_get_entry(
     out_value: *mut PChar,
 ) -> bool {
     boolclosure! {{
-      let (key, value) = dict.as_mut()?.map.iter().nth(index)?;
-      *out_key = key.as_ptr();
+      let (_, value) = dict.as_mut()?.map.iter().nth(index)?;
+      *out_key = dict.as_mut()?.keys.iter().nth(index)?.as_ptr();
       *out_value = value.as_ptr();
       Some(())
     }}
