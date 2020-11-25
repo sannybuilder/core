@@ -109,20 +109,20 @@ fn enum_items(input: &str) -> IResult<&str, EnumItems> {
                 if _type == TT::Unknown {
                     _type = TT::Int;
                 } else if _type != TT::Int {
-                    return Err(nom::Err::Failure((
-                        "Mixed type",
-                        nom::error::ErrorKind::Verify,
-                    )));
+                    return Err(nom::Err::Failure(nom::error::Error {
+                        input: "Mixed type",
+                        code: nom::error::ErrorKind::Verify,
+                    }));
                 }
             }
             EnumItemValueRaw::Text(_) => {
                 if _type == TT::Unknown {
                     _type = TT::Text;
                 } else if _type != TT::Text {
-                    return Err(nom::Err::Failure((
-                        "Mixed type",
-                        nom::error::ErrorKind::Verify,
-                    )));
+                    return Err(nom::Err::Failure(nom::error::Error {
+                        input: "Mixed type",
+                        code: nom::error::ErrorKind::Verify,
+                    }));
                 }
             }
         }
@@ -205,7 +205,10 @@ fn number(input: &str) -> IResult<&str, EnumItemValueRaw> {
     let (input, d) = digit1(input)?;
     match i32::from_str_radix(d, 10) {
         Ok(d) => Ok((input, EnumItemValueRaw::Int(d))),
-        _ => Err(nom::Err::Error((d, nom::error::ErrorKind::Digit))),
+        _ => Err(nom::Err::Error(nom::error::Error {
+            input: d,
+            code: nom::error::ErrorKind::Digit,
+        })),
     }
 }
 
@@ -301,10 +304,10 @@ fn test_enum4() {
      x=1,a="a"
     end"#
         ),
-        Err(nom::Err::Failure((
-            "Mixed type",
-            nom::error::ErrorKind::Verify
-        )))
+        Err(nom::Err::Failure(nom::error::Error {
+            input: "Mixed type",
+            code: nom::error::ErrorKind::Verify
+        }))
     )
 }
 
@@ -321,7 +324,7 @@ fn test_enum5() {
     
     enum X2
     a, b
-   end"#
+   end"#,
         ),
         Ok((
             "",

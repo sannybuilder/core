@@ -1,6 +1,5 @@
 #![cfg(windows)]
 
-extern crate libc;
 use std::collections::HashMap;
 use std::ffi::CString;
 
