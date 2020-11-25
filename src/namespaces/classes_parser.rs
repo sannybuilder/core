@@ -8,7 +8,7 @@ use nom::combinator::map;
 use nom::combinator::opt;
 use nom::multi::many0;
 use nom::multi::many1;
-use nom::multi::separated_list;
+use nom::multi::separated_list0;
 use nom::sequence::delimited;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
@@ -138,7 +138,7 @@ pub fn property(
         char('^'),
         tuple((
             terminated(literal, comma), // name
-            separated_list(
+            separated_list0(
                 comma,
                 delimited(
                     terminated(char('['), space0),
