@@ -51,8 +51,9 @@ pub unsafe extern "C" fn dictionary_str_by_str_find(
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{
-        let key = CString::new(pchar_to_str(key)?.to_ascii_lowercase()).ok()?;
-        *out = dict.as_mut()?.map.get(&key)?.as_ptr();
+        let d = dict.as_mut()?;
+        let key = apply_format(pchar_to_str(key)?, &d.case_format)?;
+        *out = d.map.get(&key)?.as_ptr();
         Some(())
     }}
 }
@@ -65,8 +66,8 @@ pub unsafe extern "C" fn dictionary_str_by_str_get_entry(
     out_value: *mut PChar,
 ) -> bool {
     boolclosure! {{
-      let (_, value) = dict.as_mut()?.map.iter().nth(index)?;
-      *out_key = dict.as_mut()?.keys.iter().nth(index)?.as_ptr();
+      let (key, value) = dict.as_mut()?.map.iter().nth(index)?;
+      *out_key = key.as_ptr();
       *out_value = value.as_ptr();
       Some(())
     }}

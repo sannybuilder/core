@@ -6,7 +6,6 @@ use std::ffi::CString;
 
 pub struct Dict<T, U> {
     pub map: HashMap<T, U>,
-    pub keys: Vec<CString>, // case-preserved
     pub duplicates: Duplicates,
     pub case_format: CaseFormat,
     pub comments: String,
@@ -30,7 +29,6 @@ where
     ) -> Self {
         Self {
             map: HashMap::new(),
-            keys: vec![],
             duplicates,
             case_format,
             comments,
@@ -85,27 +83,20 @@ where
     }
 
     pub fn add_raw(&mut self, key: &str, value: &str) -> Option<()> {
-        let ((fmt_key, value), unfmt_key) =
-            <(T, U)>::get_key_value(key, value, self.hex_keys, &self.case_format)?;
-        self.add(fmt_key, value, unfmt_key);
+        let (key, value) = <(T, U)>::get_key_value(key, value, self.hex_keys, &self.case_format)?;
+        self.add(key, value);
         Some(())
     }
 
-    pub fn add(&mut self, key: T, value: U, unfmt_key: CString) {
+    pub fn add(&mut self, key: T, value: U) {
         if self.should_add(&key) {
             self.map.insert(key, value);
-            self.keys.push(unfmt_key);
         }
     }
 }
 
 pub trait KeyValue {
-    fn get_key_value(
-        v0: &str,
-        v1: &str,
-        hex_keys: bool,
-        case_format: &CaseFormat,
-    ) -> Option<(Self, CString)>
+    fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self>
     where
         Self: std::marker::Sized;
 }
@@ -116,36 +107,26 @@ impl KeyValue for (CString, CString) {
         v1: &str,
         _hex_keys: bool,
         case_format: &CaseFormat,
-    ) -> Option<(Self, CString)> {
+    ) -> Option<Self> {
         let key = apply_format(v0, &CaseFormat::LowerCase)?;
         let value = apply_format(v1, case_format)?;
-        Some(((key, value), apply_format(v0, &CaseFormat::NoFormat)?))
+        Some((key, value))
     }
 }
 
 impl KeyValue for (i32, CString) {
-    fn get_key_value(
-        v0: &str,
-        v1: &str,
-        hex_keys: bool,
-        case_format: &CaseFormat,
-    ) -> Option<(Self, CString)> {
+    fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self> {
         let key = parse_number(v0, hex_keys)?;
         let value = apply_format(v1, case_format)?;
-        Some(((key, value), apply_format(v0, &CaseFormat::NoFormat)?))
+        Some((key, value))
     }
 }
 
 impl KeyValue for (CString, i32) {
-    fn get_key_value(
-        v0: &str,
-        v1: &str,
-        hex_keys: bool,
-        _case_format: &CaseFormat,
-    ) -> Option<(Self, CString)> {
-        let key = apply_format(v1, &CaseFormat::LowerCase)?;
+    fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self> {
+        let key = apply_format(v1, case_format)?;
         let value = parse_number(v0, hex_keys)?;
-        Some(((key, value), apply_format(v1, &CaseFormat::NoFormat)?))
+        Some((key, value))
     }
 }
 
