@@ -252,13 +252,39 @@ fn test_binary() {
     );
 
     assert_eq!(to_command("0@ &= -1"), Some(String::from("0B17: 0@ -1")));
+    assert_eq!(to_command("0@ |= 1@"), Some(String::from("0B18: 0@ 1@")));
+    assert_eq!(to_command("0@ ^= 1@"), Some(String::from("0B19: 0@ 1@")));
+    assert_eq!(to_command("0@ %= 1@"), Some(String::from("0B1B: 0@ 1@")));
+    assert_eq!(to_command("0@ >>= 1@"), Some(String::from("0B1C: 0@ 1@")));
+    assert_eq!(to_command("0@ <<= 1@"), Some(String::from("0B1D: 0@ 1@")));
 }
 
 #[test]
 fn test_ternary() {
+    println!("{:#?}", ast::parse("0@ = -1 & 1@"));
     assert_eq!(
-        to_command("0@ = 1 & 1@"),
-        Some(String::from("0B10: 0@ 1 1@"))
+        to_command("0@ = -1 & 1@"),
+        Some(String::from("0B10: 0@ -1 1@"))
+    );
+    assert_eq!(
+        to_command("0@ = 1 | 1@"),
+        Some(String::from("0B11: 0@ 1 1@"))
+    );
+    assert_eq!(
+        to_command("0@ = 1 ^ 1@"),
+        Some(String::from("0B12: 0@ 1 1@"))
+    );
+    assert_eq!(
+        to_command("0@ = 1 % 1@"),
+        Some(String::from("0B14: 0@ 1 1@"))
+    );
+    assert_eq!(
+        to_command("0@ = 1 >> 1@"),
+        Some(String::from("0B15: 0@ 1 1@"))
+    );
+    assert_eq!(
+        to_command("0@ = 1 << 1@"),
+        Some(String::from("0B16: 0@ 1 1@"))
     );
 }
 
