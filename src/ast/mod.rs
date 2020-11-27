@@ -1,11 +1,9 @@
 #![allow(dead_code)]
 use nom::branch::alt;
-use nom::bytes::complete::tag;
 use nom::character::complete::alpha1;
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
 use nom::character::complete::digit1;
-use nom::character::complete::multispace0;
 use nom::character::complete::one_of;
 use nom::combinator::all_consuming;
 use nom::combinator::consumed;
@@ -18,42 +16,12 @@ use nom::sequence::delimited;
 use nom::sequence::pair;
 use nom::sequence::preceded;
 use nom::sequence::terminated;
+use nom::{bytes::complete::tag, character::complete::space0};
 use nom::{sequence::tuple, IResult};
 use nom_locate::LocatedSpan;
-use nom_recursive::recursive_parser;
-use nom_recursive::RecursiveInfo;
 
 static LVAR_CHAR: char = '@';
 static GVAR_CHAR: char = '$';
-
-pub trait HasRecursiveInfo {
-    fn get_recursive_info(&self) -> RecursiveInfo;
-    fn set_recursive_info(self, info: RecursiveInfo) -> Self;
-}
-
-impl HasRecursiveInfo for RecursiveInfo {
-    fn get_recursive_info(&self) -> RecursiveInfo {
-        *self
-    }
-
-    fn set_recursive_info(self, info: RecursiveInfo) -> Self {
-        info
-    }
-}
-
-impl<T, U> HasRecursiveInfo for nom_locate::LocatedSpan<T, U>
-where
-    U: HasRecursiveInfo,
-{
-    fn get_recursive_info(&self) -> RecursiveInfo {
-        self.extra.get_recursive_info()
-    }
-
-    fn set_recursive_info(mut self, info: RecursiveInfo) -> Self {
-        self.extra = self.extra.set_recursive_info(info);
-        self
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum SyntaxKind {
@@ -65,30 +33,35 @@ pub enum SyntaxKind {
     UnaryPrefixExpr,
     BinaryExpr,
 
-    OperatorNot,        // ~
-    OperatorAnd,        // &
-    OperatorOr,         // |
-    OperatorXor,        // ^
-    OperatorMod,        // %
-    OperatorShr,        // >>
-    OperatorShl,        // <<
-    OperatorPlus,       // +
-    OperatorMinus,      // -
-    OperatorMul,        // *
-    OperatorDiv,        // /
-    OperatorEqual,      // =
-    OperatorEqualEqual, // ==
-    OperatorNotEqual,   // ~=
-    OperatorAndEqual,   // &=
-    OperatorOrEqual,    // |=
-    OperatorXorEqual,   // ^=
-    OperatorModEqual,   // %=
-    OperatorShrEqual,   // >>=
-    OperatorShlEqual,   // <<=
-    OperatorPlusEqual,  // +=
-    OperatorMinusEqual, // -=
-    OperatorMulEqual,   // *=
-    OperatorDivEqual,   // /=
+    OperatorNot,          // ~
+    OperatorAnd,          // &
+    OperatorOr,           // |
+    OperatorXor,          // ^
+    OperatorMod,          // %
+    OperatorShr,          // >>
+    OperatorShl,          // <<
+    OperatorPlus,         // +
+    OperatorMinus,        // -
+    OperatorMul,          // *
+    OperatorDiv,          // /
+    OperatorEqual,        // =
+    OperatorEqualEqual,   // ==
+    OperatorLessGreater,  // <>
+    OperatorNotEqual,     // ~=
+    OperatorAndEqual,     // &=
+    OperatorOrEqual,      // |=
+    OperatorXorEqual,     // ^=
+    OperatorModEqual,     // %=
+    OperatorShrEqual,     // >>=
+    OperatorShlEqual,     // <<=
+    OperatorPlusEqual,    // +=
+    OperatorMinusEqual,   // -=
+    OperatorMulEqual,     // *=
+    OperatorDivEqual,     // /=
+    OperatorGreater,      // >
+    OperatorGreaterEqual, // >=
+    OperatorLess,         // <
+    OperatorLessEqual,    // <=
 }
 
 #[derive(Debug, PartialEq)]
@@ -137,71 +110,125 @@ pub struct AST {
     pub node: Node,
 }
 
-type Span<'a> = LocatedSpan<&'a str, RecursiveInfo>;
+type Span<'a> = LocatedSpan<&'a str>;
 type R<'a, T> = IResult<Span<'a>, T>;
 
 pub fn parse(s: &str) -> R<AST> {
-    all_consuming(map(node, |node| AST { node }))(Span::from(s))
+    all_consuming(map(expression, |node| AST { node }))(Span::from(s))
 }
 
-fn node(s: Span) -> R<Node> {
-    alt((
-        map(binary_expr, |e| Node::Binary(e)),
-        map(unary_expr, |e| Node::Unary(e)),
-        map(variable, |e| Node::Token(e)),
-        map(signed_number, |e| Node::Token(e)),
-    ))(s)
+fn expression(s: Span) -> R<Node> {
+    ws(assignment)(s)
 }
 
-fn unary_expr(s: Span) -> R<UnaryPrefixExpr> {
-    map(
-        delimited(multispace0, consumed(tuple((operator, node))), multispace0),
-        |(s, (operator, node))| UnaryPrefixExpr {
-            operator,
-            operand: Box::new(node),
-            token: Token::from(s, SyntaxKind::UnaryPrefixExpr),
-        },
-    )(s)
-}
-
-#[recursive_parser]
-fn binary_expr(s: Span) -> R<BinaryExpr> {
-    map(
-        consumed(tuple((
-            delimited(multispace0, node, multispace0),
-            delimited(multispace0, operator, multispace0),
-            delimited(multispace0, node, multispace0),
-        ))),
-        |(s, (left, operator, right))| BinaryExpr {
+fn map_binary(span: Span, left: Node, op: Option<(Token, Node)>) -> Node {
+    match op {
+        Some((operator, right)) => Node::Binary(BinaryExpr {
             left: Box::new(left),
             operator,
             right: Box::new(right),
-            token: Token::from(s, SyntaxKind::BinaryExpr),
-        },
+            token: Token::from(span, SyntaxKind::BinaryExpr),
+        }),
+        _ => left,
+    }
+}
+
+fn assignment(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((
+            equality,
+            opt(tuple((ws(assignment_operator), equality))),
+        ))),
+        |(span, (left, op))| map_binary(span, left, op),
     )(s)
 }
 
-fn operator(s: Span) -> R<Token> {
+fn equality(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((
+            bitwise,
+            opt(tuple((ws(alt((op_equal_equal, op_less_greater))), bitwise))),
+        ))),
+        |(span, (left, op))| map_binary(span, left, op),
+    )(s)
+}
+
+fn bitwise(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((
+            comparison,
+            opt(tuple((ws(bitwise_operator), comparison))),
+        ))),
+        |(span, (left, op))| map_binary(span, left, op),
+    )(s)
+}
+
+fn comparison(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((term, opt(tuple((ws(comparison_operator), term)))))),
+        |(span, (left, op))| map_binary(span, left, op),
+    )(s)
+}
+
+fn term(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((
+            factor,
+            opt(tuple((ws(alt((op_plus, op_minus))), factor))),
+        ))),
+        |(span, (left, op))| map_binary(span, left, op),
+    )(s)
+}
+
+fn factor(s: Span) -> R<Node> {
+    map(
+        consumed(tuple((
+            unary,
+            opt(tuple((ws(alt((op_mul, op_div))), unary))),
+        ))),
+        |(span, (left, op))| map_binary(span, left, op),
+    )(s)
+}
+
+fn unary(s: Span) -> R<Node> {
     alt((
-        alt((
-            op_equal_equal,
-            op_plus_equal,
-            op_minus_equal,
-            op_mul_equal,
-            op_div_equal,
-            op_not_equal,
-            op_and_equal,
-            op_or_equal,
-            op_xor_equal,
-            op_mod_equal,
-            op_shr_equal,
-            op_shl_equal,
-        )),
-        alt((
-            op_not, op_and, op_or, op_xor, op_mod, op_shr, op_shl, op_plus, op_minus, op_mul,
-            op_div, op_equal,
-        )),
+        map(
+            consumed(tuple((alt((op_minus, op_not)), unary))),
+            |(span, (operator, right))| {
+                Node::Unary(UnaryPrefixExpr {
+                    operator,
+                    operand: Box::new(right),
+                    token: Token::from(span, SyntaxKind::UnaryPrefixExpr),
+                })
+            },
+        ),
+        map(alt((variable, number)), |token| Node::Token(token)),
     ))(s)
+}
+
+fn assignment_operator(s: Span) -> R<Token> {
+    alt((
+        op_plus_equal,
+        op_minus_equal,
+        op_mul_equal,
+        op_div_equal,
+        op_and_equal,
+        op_or_equal,
+        op_xor_equal,
+        op_mod_equal,
+        op_shr_equal,
+        op_shl_equal,
+        op_not_equal,
+        op_equal,
+    ))(s)
+}
+
+fn bitwise_operator(s: Span) -> R<Token> {
+    alt((op_and, op_or, op_xor, op_mod, op_shr, op_shl))(s)
+}
+
+fn comparison_operator(s: Span) -> R<Token> {
+    alt((op_greater_equal, op_greater, op_less, op_less_equal))(s)
 }
 
 fn op_not(s: Span) -> R<Token> {
@@ -248,6 +275,34 @@ fn op_mul(s: Span) -> R<Token> {
 
 fn op_div(s: Span) -> R<Token> {
     map(tag("/"), |s: Span| Token::from(s, SyntaxKind::OperatorDiv))(s)
+}
+
+fn op_greater(s: Span) -> R<Token> {
+    map(tag(">"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorGreater)
+    })(s)
+}
+
+fn op_greater_equal(s: Span) -> R<Token> {
+    map(tag(">="), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorGreaterEqual)
+    })(s)
+}
+
+fn op_less(s: Span) -> R<Token> {
+    map(tag("<"), |s: Span| Token::from(s, SyntaxKind::OperatorLess))(s)
+}
+
+fn op_less_equal(s: Span) -> R<Token> {
+    map(tag("<="), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorLessEqual)
+    })(s)
+}
+
+fn op_less_greater(s: Span) -> R<Token> {
+    map(tag("<>"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorLessGreater)
+    })(s)
 }
 
 fn op_equal(s: Span) -> R<Token> {
@@ -328,21 +383,11 @@ fn op_shl_equal(s: Span) -> R<Token> {
     })(s)
 }
 
-fn signed_int(s: Span) -> R<Token> {
-    map(
-        recognize(pair(opt(one_of("-+")), decimal_span)),
-        |s: Span| Token::from(s, SyntaxKind::IntegerLiteral),
-    )(s)
-}
-
-fn signed_float(s: Span) -> R<Token> {
-    map(recognize(pair(opt(one_of("-+")), float_span)), |s: Span| {
-        Token::from(s, SyntaxKind::FloatLiteral)
-    })(s)
-}
-
-fn signed_number(s: Span) -> R<Token> {
-    alt((signed_float, signed_int))(s)
+fn number(s: Span) -> R<Token> {
+    alt((
+        map(float_span, |s| Token::from(s, SyntaxKind::FloatLiteral)),
+        map(decimal_span, |s| Token::from(s, SyntaxKind::IntegerLiteral)),
+    ))(s)
 }
 
 fn array(s: Span) -> R<Token> {
@@ -443,6 +488,16 @@ fn global_var_span(s: Span) -> R<Span> {
     recognize(preceded(char(GVAR_CHAR), identifier_any))(s)
 }
 
+// whitespace wrapper
+fn ws<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
+    inner: F,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
+where
+    F: FnMut(Span<'a>) -> IResult<Span<'a>, O, E>,
+{
+    delimited(space0, inner, space0)
+}
+
 #[test]
 fn test2() {
     let (_, ast) = parse("  ~1@  ").unwrap();
@@ -523,6 +578,5 @@ fn test4() {
 
 #[test]
 fn test5() {
-    println!("{:#?}", parse("0@ = ~1@"));
     assert!(parse("0@ = $a(0@,1i)").is_ok());
 }
