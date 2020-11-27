@@ -98,7 +98,7 @@ pub fn to_command(expr: &str) -> Option<String> {
 
     if is_unary(&e) {
         let e = as_unary(&e)?;
-        if get_unary_operator(e) == &SyntaxKind::OperatorNot {
+        if get_unary_operator(e) == &SyntaxKind::OperatorBitwiseNot {
             if let Some(var) = as_variable(e.operand.as_ref()) {
                 return format_unary(OP_NOT_UNARY, &String::from(token_str(expr, var)));
             }
@@ -112,42 +112,42 @@ pub fn to_command(expr: &str) -> Option<String> {
         if let Some(left_token) = as_token(left.as_ref()) {
             if let Some(right_token) = as_token(right.as_ref()) {
                 match op.syntax_kind {
-                    SyntaxKind::OperatorAndEqual => {
+                    SyntaxKind::OperatorBitwiseAndEqual => {
                         return format_binary(
                             OP_AND_COMPOUND,
                             &String::from(token_str(expr, left_token)),
                             &String::from(token_str(expr, right_token)),
                         )
                     }
-                    SyntaxKind::OperatorOrEqual => {
+                    SyntaxKind::OperatorBitwiseOrEqual => {
                         return format_binary(
                             OP_OR_COMPOUND,
                             &String::from(token_str(expr, left_token)),
                             &String::from(token_str(expr, right_token)),
                         )
                     }
-                    SyntaxKind::OperatorXorEqual => {
+                    SyntaxKind::OperatorBitwiseXorEqual => {
                         return format_binary(
                             OP_XOR_COMPOUND,
                             &String::from(token_str(expr, left_token)),
                             &String::from(token_str(expr, right_token)),
                         )
                     }
-                    SyntaxKind::OperatorModEqual => {
+                    SyntaxKind::OperatorBitwiseModEqual => {
                         return format_binary(
                             OP_MOD_COMPOUND,
                             &String::from(token_str(expr, left_token)),
                             &String::from(token_str(expr, right_token)),
                         )
                     }
-                    SyntaxKind::OperatorShrEqual => {
+                    SyntaxKind::OperatorBitwiseShrEqual => {
                         return format_binary(
                             OP_SHR_COMPOUND,
                             &String::from(token_str(expr, left_token)),
                             &String::from(token_str(expr, right_token)),
                         )
                     }
-                    SyntaxKind::OperatorShlEqual => {
+                    SyntaxKind::OperatorBitwiseShlEqual => {
                         return format_binary(
                             OP_SHL_COMPOUND,
                             &String::from(token_str(expr, left_token)),
@@ -157,7 +157,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                     SyntaxKind::OperatorEqual => {
                         // var = ~var
                         let unary = as_unary(right)?;
-                        if get_unary_operator(unary) == &SyntaxKind::OperatorNot {
+                        if get_unary_operator(unary) == &SyntaxKind::OperatorBitwiseNot {
                             return format_binary(
                                 OP_NOT,
                                 &String::from(token_str(expr, left_token)),
@@ -171,7 +171,7 @@ pub fn to_command(expr: &str) -> Option<String> {
 
             if let Some(binary_expr) = as_binary(right.as_ref()) {
                 match get_binary_operator(binary_expr) {
-                    SyntaxKind::OperatorAnd => {
+                    SyntaxKind::OperatorBitwiseAnd => {
                         return format_ternary(
                             OP_AND,
                             &String::from(token_str(expr, left_token)),
@@ -179,7 +179,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                             &String::from(token_str(expr, as_token(&binary_expr.right)?)),
                         )
                     }
-                    SyntaxKind::OperatorOr => {
+                    SyntaxKind::OperatorBitwiseOr => {
                         return format_ternary(
                             OP_OR,
                             &String::from(token_str(expr, left_token)),
@@ -187,7 +187,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                             &String::from(token_str(expr, as_token(&binary_expr.right)?)),
                         )
                     }
-                    SyntaxKind::OperatorXor => {
+                    SyntaxKind::OperatorBitwiseXor => {
                         return format_ternary(
                             OP_XOR,
                             &String::from(token_str(expr, left_token)),
@@ -195,7 +195,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                             &String::from(token_str(expr, as_token(&binary_expr.right)?)),
                         )
                     }
-                    SyntaxKind::OperatorMod => {
+                    SyntaxKind::OperatorBitwiseMod => {
                         return format_ternary(
                             OP_MOD,
                             &String::from(token_str(expr, left_token)),
@@ -203,7 +203,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                             &String::from(token_str(expr, as_token(&binary_expr.right)?)),
                         )
                     }
-                    SyntaxKind::OperatorShr => {
+                    SyntaxKind::OperatorBitwiseShr => {
                         return format_ternary(
                             OP_SHR,
                             &String::from(token_str(expr, left_token)),
@@ -211,7 +211,7 @@ pub fn to_command(expr: &str) -> Option<String> {
                             &String::from(token_str(expr, as_token(&binary_expr.right)?)),
                         )
                     }
-                    SyntaxKind::OperatorShl => {
+                    SyntaxKind::OperatorBitwiseShl => {
                         return format_ternary(
                             OP_SHL,
                             &String::from(token_str(expr, left_token)),
