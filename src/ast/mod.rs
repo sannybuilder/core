@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use nom::branch::alt;
 use nom::character::complete::alpha1;
 use nom::character::complete::alphanumeric1;
@@ -33,35 +32,35 @@ pub enum SyntaxKind {
     UnaryPrefixExpr,
     BinaryExpr,
 
-    OperatorNot,          // ~
-    OperatorAnd,          // &
-    OperatorOr,           // |
-    OperatorXor,          // ^
-    OperatorMod,          // %
-    OperatorShr,          // >>
-    OperatorShl,          // <<
-    OperatorPlus,         // +
-    OperatorMinus,        // -
-    OperatorMul,          // *
-    OperatorDiv,          // /
-    OperatorEqual,        // =
-    OperatorEqualEqual,   // ==
-    OperatorLessGreater,  // <>
-    OperatorNotEqual,     // ~=
-    OperatorAndEqual,     // &=
-    OperatorOrEqual,      // |=
-    OperatorXorEqual,     // ^=
-    OperatorModEqual,     // %=
-    OperatorShrEqual,     // >>=
-    OperatorShlEqual,     // <<=
-    OperatorPlusEqual,    // +=
-    OperatorMinusEqual,   // -=
-    OperatorMulEqual,     // *=
-    OperatorDivEqual,     // /=
-    OperatorGreater,      // >
-    OperatorGreaterEqual, // >=
-    OperatorLess,         // <
-    OperatorLessEqual,    // <=
+    OperatorBitwiseNot,      // ~
+    OperatorBitwiseAnd,      // &
+    OperatorBitwiseOr,       // |
+    OperatorBitwiseXor,      // ^
+    OperatorBitwiseMod,      // %
+    OperatorBitwiseShr,      // >>
+    OperatorBitwiseShl,      // <<
+    OperatorPlus,            // +
+    OperatorMinus,           // -
+    OperatorMul,             // *
+    OperatorDiv,             // /
+    OperatorEqual,           // =
+    OperatorEqualEqual,      // ==
+    OperatorLessGreater,     // <>
+    OperatorBitwiseNotEqual, // ~=
+    OperatorBitwiseAndEqual, // &=
+    OperatorBitwiseOrEqual,  // |=
+    OperatorBitwiseXorEqual, // ^=
+    OperatorBitwiseModEqual, // %=
+    OperatorBitwiseShrEqual, // >>=
+    OperatorBitwiseShlEqual, // <<=
+    OperatorPlusEqual,       // +=
+    OperatorMinusEqual,      // -=
+    OperatorMulEqual,        // *=
+    OperatorDivEqual,        // /=
+    OperatorGreater,         // >
+    OperatorGreaterEqual,    // >=
+    OperatorLess,            // <
+    OperatorLessEqual,       // <=
 }
 
 #[derive(Debug, PartialEq)]
@@ -193,7 +192,7 @@ fn factor(s: Span) -> R<Node> {
 fn unary(s: Span) -> R<Node> {
     alt((
         map(
-            consumed(tuple((alt((op_minus, op_not)), unary))),
+            consumed(tuple((alt((op_minus, op_bitwise_not)), unary))),
             |(span, (operator, right))| {
                 Node::Unary(UnaryPrefixExpr {
                     operator,
@@ -212,51 +211,72 @@ fn assignment_operator(s: Span) -> R<Token> {
         op_minus_equal,
         op_mul_equal,
         op_div_equal,
-        op_and_equal,
-        op_or_equal,
-        op_xor_equal,
-        op_mod_equal,
-        op_shr_equal,
-        op_shl_equal,
-        op_not_equal,
+        op_bitwise_and_equal,
+        op_bitwise_or_equal,
+        op_bitwise_xor_equal,
+        op_bitwise_mod_equal,
+        op_bitwise_shr_equal,
+        op_bitwise_shl_equal,
+        op_bitwise_not_equal,
         op_equal,
     ))(s)
 }
 
 fn bitwise_operator(s: Span) -> R<Token> {
-    alt((op_and, op_or, op_xor, op_mod, op_shr, op_shl))(s)
+    alt((
+        op_bitwise_and,
+        op_bitwise_or,
+        op_bitwise_xor,
+        op_bitwise_mod,
+        op_bitwise_shr,
+        op_bitwise_shl,
+    ))(s)
 }
 
 fn comparison_operator(s: Span) -> R<Token> {
     alt((op_greater_equal, op_greater, op_less, op_less_equal))(s)
 }
 
-fn op_not(s: Span) -> R<Token> {
-    map(tag("~"), |s: Span| Token::from(s, SyntaxKind::OperatorNot))(s)
+fn op_bitwise_not(s: Span) -> R<Token> {
+    map(tag("~"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseNot)
+    })(s)
 }
 
-fn op_and(s: Span) -> R<Token> {
-    map(tag("&"), |s: Span| Token::from(s, SyntaxKind::OperatorAnd))(s)
+fn op_bitwise_and(s: Span) -> R<Token> {
+    map(tag("&"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseAnd)
+    })(s)
 }
 
-fn op_or(s: Span) -> R<Token> {
-    map(tag("|"), |s: Span| Token::from(s, SyntaxKind::OperatorOr))(s)
+fn op_bitwise_or(s: Span) -> R<Token> {
+    map(tag("|"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseOr)
+    })(s)
 }
 
-fn op_xor(s: Span) -> R<Token> {
-    map(tag("^"), |s: Span| Token::from(s, SyntaxKind::OperatorXor))(s)
+fn op_bitwise_xor(s: Span) -> R<Token> {
+    map(tag("^"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseXor)
+    })(s)
 }
 
-fn op_mod(s: Span) -> R<Token> {
-    map(tag("%"), |s: Span| Token::from(s, SyntaxKind::OperatorMod))(s)
+fn op_bitwise_mod(s: Span) -> R<Token> {
+    map(tag("%"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseMod)
+    })(s)
 }
 
-fn op_shr(s: Span) -> R<Token> {
-    map(tag(">>"), |s: Span| Token::from(s, SyntaxKind::OperatorShr))(s)
+fn op_bitwise_shr(s: Span) -> R<Token> {
+    map(tag(">>"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseShr)
+    })(s)
 }
 
-fn op_shl(s: Span) -> R<Token> {
-    map(tag("<<"), |s: Span| Token::from(s, SyntaxKind::OperatorShl))(s)
+fn op_bitwise_shl(s: Span) -> R<Token> {
+    map(tag("<<"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorBitwiseShl)
+    })(s)
 }
 
 fn op_plus(s: Span) -> R<Token> {
@@ -341,45 +361,45 @@ fn op_div_equal(s: Span) -> R<Token> {
     })(s)
 }
 
-fn op_not_equal(s: Span) -> R<Token> {
+fn op_bitwise_not_equal(s: Span) -> R<Token> {
     map(tag("~="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorNotEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseNotEqual)
     })(s)
 }
 
-fn op_and_equal(s: Span) -> R<Token> {
+fn op_bitwise_and_equal(s: Span) -> R<Token> {
     map(tag("&="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorAndEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseAndEqual)
     })(s)
 }
 
-fn op_or_equal(s: Span) -> R<Token> {
+fn op_bitwise_or_equal(s: Span) -> R<Token> {
     map(tag("|="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorOrEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseOrEqual)
     })(s)
 }
 
-fn op_xor_equal(s: Span) -> R<Token> {
+fn op_bitwise_xor_equal(s: Span) -> R<Token> {
     map(tag("^="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorXorEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseXorEqual)
     })(s)
 }
 
-fn op_mod_equal(s: Span) -> R<Token> {
+fn op_bitwise_mod_equal(s: Span) -> R<Token> {
     map(tag("%="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorModEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseModEqual)
     })(s)
 }
 
-fn op_shr_equal(s: Span) -> R<Token> {
+fn op_bitwise_shr_equal(s: Span) -> R<Token> {
     map(tag(">>="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorShrEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseShrEqual)
     })(s)
 }
 
-fn op_shl_equal(s: Span) -> R<Token> {
+fn op_bitwise_shl_equal(s: Span) -> R<Token> {
     map(tag("<<="), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorShlEqual)
+        Token::from(s, SyntaxKind::OperatorBitwiseShlEqual)
     })(s)
 }
 
@@ -435,22 +455,16 @@ fn global_var(s: Span) -> R<Token> {
 }
 
 // combination of letters, digits and underscore, not starting with a digit
-fn identifier(s: Span) -> R<String> {
-    map(
-        recognize(pair(
-            alt((alpha1, tag("_"))),
-            many0(alt((alphanumeric1, tag("_")))),
-        )),
-        |s: Span| String::from(*s.fragment()),
-    )(s)
+fn identifier(s: Span) -> R<Span> {
+    recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0(alt((alphanumeric1, tag("_")))),
+    ))(s)
 }
 
 // any combination of letters, digits and underscore
-fn identifier_any(s: Span) -> R<String> {
-    map(
-        recognize(many1(alt((alphanumeric1, tag("_"))))),
-        |s: Span| String::from(*s.fragment()),
-    )(s)
+fn identifier_any_span(s: Span) -> R<Span> {
+    recognize(many1(alt((alphanumeric1, tag("_")))))(s)
 }
 
 fn decimal_span(s: Span) -> R<Span> {
@@ -485,7 +499,7 @@ fn local_var_span(s: Span) -> R<Span> {
 }
 
 fn global_var_span(s: Span) -> R<Span> {
-    recognize(preceded(char(GVAR_CHAR), identifier_any))(s)
+    recognize(preceded(char(GVAR_CHAR), identifier_any_span))(s)
 }
 
 // whitespace wrapper
@@ -509,7 +523,7 @@ fn test2() {
                 operator: Token {
                     start: 3,
                     len: 1,
-                    syntax_kind: SyntaxKind::OperatorNot,
+                    syntax_kind: SyntaxKind::OperatorBitwiseNot,
                     // text: String::from("~")
                 },
                 operand: Box::new(Node::Token(Token {
