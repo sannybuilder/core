@@ -414,6 +414,10 @@ fn array(s: Span) -> R<Token> {
     alt((array_typed, array_indexed))(s)
 }
 
+fn variable_type_char(s: Span) -> R<Option<char>> {
+    opt(one_of("sv"))(s)
+}
+
 fn array_typed(s: Span) -> R<Token> {
     map(
         recognize(tuple((
@@ -495,11 +499,17 @@ fn variable_span(s: Span) -> R<Span> {
 }
 
 fn local_var_span(s: Span) -> R<Span> {
-    recognize(terminated(digit1, char(LVAR_CHAR)))(s)
+    recognize(terminated(
+        digit1,
+        tuple((char(LVAR_CHAR), variable_type_char)),
+    ))(s)
 }
 
 fn global_var_span(s: Span) -> R<Span> {
-    recognize(preceded(char(GVAR_CHAR), identifier_any_span))(s)
+    recognize(preceded(
+        tuple((variable_type_char, char(GVAR_CHAR))),
+        identifier_any_span,
+    ))(s)
 }
 
 // whitespace wrapper
@@ -591,6 +601,161 @@ fn test4() {
 }
 
 #[test]
-fn test5() {
-    assert!(parse("0@ = $a(0@,1i)").is_ok());
+fn variables() {
+    let (_, ast) = parse("0@").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::LocalVariable,
+                start: 1,
+                len: 2,
+            })
+        }
+    );
+    let (_, ast) = parse("0@s").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::LocalVariable,
+                start: 1,
+                len: 3,
+            })
+        }
+    );
+    let (_, ast) = parse("0@v").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::LocalVariable,
+                start: 1,
+                len: 3,
+            })
+        }
+    );
+    let (_, ast) = parse("$var").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 4,
+            })
+        }
+    );
+    let (_, ast) = parse("s$var").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 5,
+            })
+        }
+    );
+    let (_, ast) = parse("v$var").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 5,
+            })
+        }
+    );
+    let (_, ast) = parse("$1").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 2,
+            })
+        }
+    );
+    let (_, ast) = parse("s$1").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 3,
+            })
+        }
+    );
+    let (_, ast) = parse("v$1").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::GlobalVariable,
+                start: 1,
+                len: 3,
+            })
+        }
+    );
+
+    let (_, ast) = parse("$var($index,10i)").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::Array,
+                start: 1,
+                len: 16,
+            })
+        }
+    );
+
+    let (_, ast) = parse("$1($2,10f)").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::Array,
+                start: 1,
+                len: 10,
+            })
+        }
+    );
+    let (_, ast) = parse("$1(11@,10s)").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::Array,
+                start: 1,
+                len: 11,
+            })
+        }
+    );
+    let (_, ast) = parse("$var[1]").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::Array,
+                start: 1,
+                len: 7,
+            })
+        }
+    );
+    let (_, ast) = parse("$var[0@]").unwrap();
+    assert_eq!(
+        ast,
+        AST {
+            node: Node::Token(Token {
+                syntax_kind: SyntaxKind::Array,
+                start: 1,
+                len: 8,
+            })
+        }
+    );
 }
