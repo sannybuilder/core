@@ -1,9 +1,4 @@
-use ast::{BinaryExpr, UnaryPrefixExpr};
-
-use crate::ast;
-use crate::ast::Node;
-use crate::ast::SyntaxKind;
-use crate::ast::Token;
+use crate::parser::interface::*;
 
 static OP_AND: u16 = 0x0B10;
 static OP_OR: u16 = 0x0B11;
@@ -94,7 +89,7 @@ fn token_str<'a>(s: &'a str, token: &Token) -> &'a str {
 }
 
 pub fn to_command(expr: &str) -> Option<String> {
-    let e = ast::parse(expr).ok()?.1.node;
+    let e = crate::parser::parse(expr).ok()?.1.node;
 
     if is_unary(&e) {
         let e = as_unary(&e)?;
@@ -259,37 +254,40 @@ fn test_binary() {
     assert_eq!(to_command("0@ <<= 1@"), Some(String::from("0B1D: 0@ 1@")));
 }
 
-#[test]
-fn test_ternary() {
-    println!("{:#?}", ast::parse("0@ = -1 & 1@"));
-    assert_eq!(
-        to_command("0@ = -1 & 1@"),
-        Some(String::from("0B10: 0@ -1 1@"))
-    );
-    assert_eq!(
-        to_command("0@ = 1 | 1@"),
-        Some(String::from("0B11: 0@ 1 1@"))
-    );
-    assert_eq!(
-        to_command("0@ = 1 ^ 1@"),
-        Some(String::from("0B12: 0@ 1 1@"))
-    );
-    assert_eq!(
-        to_command("0@ = 1 % 1@"),
-        Some(String::from("0B14: 0@ 1 1@"))
-    );
-    assert_eq!(
-        to_command("0@ = 1 >> 1@"),
-        Some(String::from("0B15: 0@ 1 1@"))
-    );
-    assert_eq!(
-        to_command("0@ = 1 << 1@"),
-        Some(String::from("0B16: 0@ 1 1@"))
-    );
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_ternary() {
+        assert_eq!(
+            to_command("0@ = -1 & 1@"),
+            Some(String::from("0B10: 0@ -1 1@"))
+        );
+        assert_eq!(
+            to_command("0@ = 1 | 1@"),
+            Some(String::from("0B11: 0@ 1 1@"))
+        );
+        assert_eq!(
+            to_command("0@ = 1 ^ 1@"),
+            Some(String::from("0B12: 0@ 1 1@"))
+        );
+        assert_eq!(
+            to_command("0@ = 1 % 1@"),
+            Some(String::from("0B14: 0@ 1 1@"))
+        );
+        assert_eq!(
+            to_command("0@ = 1 >> 1@"),
+            Some(String::from("0B15: 0@ 1 1@"))
+        );
+        assert_eq!(
+            to_command("0@ = 1 << 1@"),
+            Some(String::from("0B16: 0@ 1 1@"))
+        );
+    }
 
-#[test]
-fn test_not() {
-    assert_eq!(to_command("0@ = ~1@"), Some(String::from("0B13: 0@ 1@")));
-    assert_eq!(to_command("~0@"), Some(String::from("0B1A: 0@")));
+    #[test]
+    fn test_not() {
+        assert_eq!(to_command("0@ = ~1@"), Some(String::from("0B13: 0@ 1@")));
+        assert_eq!(to_command("~0@"), Some(String::from("0B1A: 0@")));
+    }
 }
