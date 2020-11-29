@@ -1,7 +1,10 @@
+use nom::bytes::complete::tag;
+use nom::character::complete::alpha1;
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
 use nom::character::complete::digit1;
 use nom::character::complete::one_of;
+use nom::combinator::consumed;
 use nom::combinator::map;
 use nom::combinator::opt;
 use nom::combinator::recognize;
@@ -11,16 +14,11 @@ use nom::sequence::pair;
 use nom::sequence::preceded;
 use nom::sequence::tuple;
 use nom::{branch::alt, character::complete::hex_digit1};
-use nom::{bytes::complete::tag, combinator::map_res};
-use nom::{character::complete::alpha1, combinator::map_opt};
 
 use crate::parser::interface::*;
 
 pub fn number(s: Span) -> R<Token> {
-    alt((
-        map(float_span, |s| Token::from(s, SyntaxKind::FloatLiteral)),
-        map(decimal_span, |s| Token::from(s, SyntaxKind::IntegerLiteral)),
-    ))(s)
+    alt((float, decimal))(s)
 }
 
 // combination of letters, digits and underscore, not starting with a digit
@@ -32,8 +30,19 @@ pub fn identifier(s: Span) -> R<Span> {
 }
 
 // any combination of letters, digits and underscore
-pub fn identifier_any_span(s: Span) -> R<Span> {
-    recognize(many1(alt((alphanumeric1, tag("_")))))(s)
+pub fn identifier_any(s: Span) -> R<Token> {
+    map(
+        consumed(many1(alt((alphanumeric1, tag("_"))))),
+        |(span, _)| Token::from(span, SyntaxKind::Identifier),
+    )(s)
+}
+
+pub fn decimal(s: Span) -> R<Token> {
+    map(decimal_span, |s| Token::from(s, SyntaxKind::IntegerLiteral))(s)
+}
+
+pub fn float(s: Span) -> R<Token> {
+    map(float_span, |s| Token::from(s, SyntaxKind::FloatLiteral))(s)
 }
 
 pub fn decimal_span(s: Span) -> R<Span> {

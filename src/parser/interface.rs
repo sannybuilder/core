@@ -2,9 +2,11 @@ use nom::IResult;
 use nom_locate::LocatedSpan;
 #[derive(Debug, PartialEq)]
 pub enum SyntaxKind {
+    Identifier,
     IntegerLiteral,
     FloatLiteral,
-    Array,
+    ArrayElementSCR,
+    IndexedVariable,
     LocalVariable,
     GlobalVariable,
     UnaryPrefixExpr,
@@ -61,8 +63,18 @@ impl Token {
 #[derive(Debug, PartialEq)]
 pub enum Node {
     Token(Token),
+    Variable(Variable),
     Binary(BinaryExpr),
     Unary(UnaryPrefixExpr),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Variable {
+    Global(SingleVariable),
+    Local(SingleVariable),
+    Indexed(IndexedVariable),
+    ArrayElement(ArrayElementSCR),
+    // ADMA
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,6 +90,37 @@ pub struct UnaryPrefixExpr {
     pub operator: Token,
     pub operand: Box<Node>,
     pub token: Token,
+}
+#[derive(Debug, PartialEq)]
+pub struct ArrayElementSCR {
+    pub array_var: Box<Variable>,
+    pub index_var: Box<Variable>,
+    pub _type: VariableType,
+    pub len: Token,
+    pub token: Token,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IndexedVariable {
+    pub var: Box<Variable>,
+    pub index: Box<Node>,
+    pub token: Token,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct SingleVariable {
+    pub name: Token,
+    pub token: Token,
+    pub _type: VariableType,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum VariableType {
+    Unknown,
+    Int,    // i
+    Float,  // f
+    Str16,  // s
+    Str256, // v
 }
 
 #[derive(Debug, PartialEq)]

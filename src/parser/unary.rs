@@ -20,9 +20,10 @@ pub fn unary(s: Span) -> R<Node> {
                 })
             },
         ),
-        map(alt((variable::variable, literal::number)), |token| {
-            Node::Token(token)
-        }),
+        alt((
+            map(variable::variable, |v| Node::Variable(v)),
+            map(literal::number, |n| Node::Token(n)),
+        )),
     ))(s)
 }
 
@@ -42,16 +43,21 @@ mod tests {
                         start: 3,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorBitwiseNot,
-                        // text: String::from("~")
                     },
-                    operand: Box::new(Node::Token(Token {
-                        start: 4,
-                        len: 2,
-                        // text: String::from("1@"),
-                        syntax_kind: SyntaxKind::LocalVariable,
-                    })),
+                    operand: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 4,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral,
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 4,
+                            len: 2,
+                            syntax_kind: SyntaxKind::LocalVariable,
+                        }
+                    }))),
                     token: Token {
-                        // text: String::from("~1@"),
                         start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
