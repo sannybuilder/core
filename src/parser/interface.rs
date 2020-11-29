@@ -117,15 +117,15 @@ pub struct SingleVariable {
 #[derive(Debug, PartialEq)]
 pub enum VariableType {
     Unknown,
-    Int,    // i
-    Float,  // f
-    Str16,  // s
-    Str256, // v
+    Int,         // i
+    Float,       // f
+    ShortString, // s
+    LongString,  // v
 }
 
 #[derive(Debug, PartialEq)]
 pub struct AST {
-    pub node: Node,
+    pub body: Vec<Node>,
 }
 
 pub type Span<'a> = LocatedSpan<&'a str>;

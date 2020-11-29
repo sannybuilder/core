@@ -98,7 +98,8 @@ fn token_str<'a>(s: &'a str, token: &Token) -> &'a str {
 }
 
 pub fn to_command(expr: &str) -> Option<String> {
-    let e = crate::parser::parse(expr).ok()?.1.node;
+    let body = crate::parser::parse(expr).ok()?.1.body;
+    let e = body.get(0)?;
 
     if is_unary(&e) {
         let e = as_unary(&e)?;

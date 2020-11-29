@@ -81,7 +81,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Binary(BinaryExpr {
+                body: vec![Node::Binary(BinaryExpr {
                     left: Box::new(Node::Variable(Variable::Local(SingleVariable {
                         name: Token {
                             start: 1,
@@ -118,7 +118,7 @@ mod tests {
                         len: 15,
                         syntax_kind: SyntaxKind::BinaryExpr
                     }
-                })
+                })]
             }
         )
     }

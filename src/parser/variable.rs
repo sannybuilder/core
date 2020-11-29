@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Local(SingleVariable {
+                body: vec![Node::Variable(Variable::Local(SingleVariable {
                     name: Token {
                         start: 1,
                         len: 1,
@@ -134,7 +134,7 @@ mod tests {
                         start: 1,
                         len: 2,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -144,19 +144,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Local(SingleVariable {
+                body: vec![Node::Variable(Variable::Local(SingleVariable {
                     name: Token {
                         start: 1,
                         len: 1,
                         syntax_kind: SyntaxKind::IntegerLiteral
                     },
-                    _type: VariableType::Str16,
+                    _type: VariableType::ShortString,
                     token: Token {
                         syntax_kind: SyntaxKind::LocalVariable,
                         start: 1,
                         len: 3,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -166,19 +166,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Local(SingleVariable {
+                body: vec![Node::Variable(Variable::Local(SingleVariable {
                     name: Token {
                         start: 1,
                         len: 1,
                         syntax_kind: SyntaxKind::IntegerLiteral
                     },
-                    _type: VariableType::Str256,
+                    _type: VariableType::LongString,
                     token: Token {
                         syntax_kind: SyntaxKind::LocalVariable,
                         start: 1,
                         len: 3,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -189,7 +189,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 2,
                         len: 3,
@@ -201,7 +201,7 @@ mod tests {
                         start: 1,
                         len: 4,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -212,19 +212,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::Identifier
                     },
-                    _type: VariableType::Str16,
+                    _type: VariableType::ShortString,
                     token: Token {
                         syntax_kind: SyntaxKind::GlobalVariable,
                         start: 1,
                         len: 5,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -234,19 +234,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::Identifier
                     },
-                    _type: VariableType::Str256,
+                    _type: VariableType::LongString,
                     token: Token {
                         syntax_kind: SyntaxKind::GlobalVariable,
                         start: 1,
                         len: 5,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -257,7 +257,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 2,
                         len: 1,
@@ -269,7 +269,7 @@ mod tests {
                         start: 1,
                         len: 2,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -279,19 +279,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 3,
                         len: 1,
                         syntax_kind: SyntaxKind::IntegerLiteral
                     },
-                    _type: VariableType::Str16,
+                    _type: VariableType::ShortString,
                     token: Token {
                         syntax_kind: SyntaxKind::GlobalVariable,
                         start: 1,
                         len: 3,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -301,19 +301,19 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Global(SingleVariable {
+                body: vec![Node::Variable(Variable::Global(SingleVariable {
                     name: Token {
                         start: 3,
                         len: 1,
                         syntax_kind: SyntaxKind::IntegerLiteral
                     },
-                    _type: VariableType::Str256,
+                    _type: VariableType::LongString,
                     token: Token {
                         syntax_kind: SyntaxKind::GlobalVariable,
                         start: 1,
                         len: 3,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::ArrayElement(ArrayElementSCR {
+                body: vec![Node::Variable(Variable::ArrayElement(ArrayElementSCR {
                     array_var: Box::new(Variable::Global(SingleVariable {
                         name: Token {
                             start: 2,
@@ -361,7 +361,7 @@ mod tests {
                         start: 1,
                         len: 16,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -372,7 +372,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::ArrayElement(ArrayElementSCR {
+                body: vec![Node::Variable(Variable::ArrayElement(ArrayElementSCR {
                     array_var: Box::new(Variable::Global(SingleVariable {
                         name: Token {
                             start: 2,
@@ -410,7 +410,7 @@ mod tests {
                         start: 1,
                         len: 10,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -421,7 +421,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::ArrayElement(ArrayElementSCR {
+                body: vec![Node::Variable(Variable::ArrayElement(ArrayElementSCR {
                     array_var: Box::new(Variable::Global(SingleVariable {
                         name: Token {
                             start: 2,
@@ -448,7 +448,7 @@ mod tests {
                             syntax_kind: SyntaxKind::LocalVariable
                         }
                     })),
-                    _type: VariableType::Str16,
+                    _type: VariableType::ShortString,
                     len: Token {
                         syntax_kind: SyntaxKind::IntegerLiteral,
                         start: 8,
@@ -459,7 +459,7 @@ mod tests {
                         start: 1,
                         len: 11,
                     }
-                }))
+                }))]
             }
         );
     }
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Indexed(IndexedVariable {
+                body: vec![Node::Variable(Variable::Indexed(IndexedVariable {
                     var: Box::new(Variable::Global(SingleVariable {
                         name: Token {
                             start: 2,
@@ -494,7 +494,7 @@ mod tests {
                         len: 7,
                         syntax_kind: SyntaxKind::IndexedVariable
                     }
-                }))
+                }))]
             }
         );
     }
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Variable(Variable::Indexed(IndexedVariable {
+                body: vec![Node::Variable(Variable::Indexed(IndexedVariable {
                     var: Box::new(Variable::Global(SingleVariable {
                         name: Token {
                             start: 2,
@@ -537,7 +537,7 @@ mod tests {
                         len: 8,
                         syntax_kind: SyntaxKind::IndexedVariable
                     }
-                }))
+                }))]
             }
         );
     }
