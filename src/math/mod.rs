@@ -45,6 +45,12 @@ fn as_token(node: &Node) -> Option<&Token> {
     match node {
         Node::Token(e) => Some(e),
         Node::Unary(e) => Some(&e.token),
+        Node::Variable(e) => match e {
+            Variable::Local(v) => Some(&v.token),
+            Variable::Global(v) => Some(&v.token),
+            Variable::ArrayElement(v) => Some(&v.token),
+            Variable::Indexed(v) => Some(&v.token),
+        },
         _ => None,
     }
 }
@@ -52,7 +58,10 @@ fn as_token(node: &Node) -> Option<&Token> {
 fn as_variable(node: &Node) -> Option<&Token> {
     let token = as_token(node)?;
     match token.syntax_kind {
-        SyntaxKind::LocalVariable | SyntaxKind::GlobalVariable | SyntaxKind::Array => Some(token),
+        SyntaxKind::LocalVariable
+        | SyntaxKind::GlobalVariable
+        | SyntaxKind::ArrayElementSCR
+        | SyntaxKind::IndexedVariable => Some(token),
         _ => None,
     }
 }
@@ -222,41 +231,40 @@ pub fn to_command(expr: &str) -> Option<String> {
     None
 }
 
-#[test]
-
-fn test_unary() {
-    assert_eq!(to_command("~0@"), Some(String::from("0B1A: 0@")));
-    assert_eq!(to_command("~$var"), Some(String::from("0B1A: $var")));
-    assert_eq!(
-        to_command("~10@($_,1i)"),
-        Some(String::from("0B1A: 10@($_,1i)"))
-    );
-    assert_eq!(
-        to_command("~$0101(1000@,12f)"),
-        Some(String::from("0B1A: $0101(1000@,12f)"))
-    );
-}
-
-#[test]
-fn test_binary() {
-    assert_eq!(to_command("0@ &= 1@"), Some(String::from("0B17: 0@ 1@")));
-    assert_eq!(to_command("0@ &= 100"), Some(String::from("0B17: 0@ 100")));
-    assert_eq!(
-        to_command("0@ &= 42.01"),
-        Some(String::from("0B17: 0@ 42.01"))
-    );
-
-    assert_eq!(to_command("0@ &= -1"), Some(String::from("0B17: 0@ -1")));
-    assert_eq!(to_command("0@ |= 1@"), Some(String::from("0B18: 0@ 1@")));
-    assert_eq!(to_command("0@ ^= 1@"), Some(String::from("0B19: 0@ 1@")));
-    assert_eq!(to_command("0@ %= 1@"), Some(String::from("0B1B: 0@ 1@")));
-    assert_eq!(to_command("0@ >>= 1@"), Some(String::from("0B1C: 0@ 1@")));
-    assert_eq!(to_command("0@ <<= 1@"), Some(String::from("0B1D: 0@ 1@")));
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_command_unary() {
+        assert_eq!(to_command("~0@"), Some(String::from("0B1A: 0@")));
+        assert_eq!(to_command("~$var"), Some(String::from("0B1A: $var")));
+        assert_eq!(
+            to_command("~10@($_,1i)"),
+            Some(String::from("0B1A: 10@($_,1i)"))
+        );
+        assert_eq!(
+            to_command("~$0101(1000@,12f)"),
+            Some(String::from("0B1A: $0101(1000@,12f)"))
+        );
+    }
+
+    #[test]
+    fn test_command_binary() {
+        assert_eq!(to_command("0@ &= 1@"), Some(String::from("0B17: 0@ 1@")));
+        assert_eq!(to_command("0@ &= 100"), Some(String::from("0B17: 0@ 100")));
+        assert_eq!(
+            to_command("0@ &= 42.01"),
+            Some(String::from("0B17: 0@ 42.01"))
+        );
+
+        assert_eq!(to_command("0@ &= -1"), Some(String::from("0B17: 0@ -1")));
+        assert_eq!(to_command("0@ |= 1@"), Some(String::from("0B18: 0@ 1@")));
+        assert_eq!(to_command("0@ ^= 1@"), Some(String::from("0B19: 0@ 1@")));
+        assert_eq!(to_command("0@ %= 1@"), Some(String::from("0B1B: 0@ 1@")));
+        assert_eq!(to_command("0@ >>= 1@"), Some(String::from("0B1C: 0@ 1@")));
+        assert_eq!(to_command("0@ <<= 1@"), Some(String::from("0B1D: 0@ 1@")));
+    }
+
     #[test]
     fn test_ternary() {
         assert_eq!(

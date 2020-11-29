@@ -82,28 +82,40 @@ mod tests {
             ast,
             AST {
                 node: Node::Binary(BinaryExpr {
-                    left: Box::new(Node::Token(Token {
-                        start: 1,
-                        len: 2,
-                        // text: String::from("0@"),
-                        syntax_kind: SyntaxKind::LocalVariable,
-                    })),
+                    left: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 1,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 2,
+                            syntax_kind: SyntaxKind::LocalVariable,
+                        }
+                    }))),
                     operator: Token {
                         start: 4,
                         len: 2,
-                        // text: String::from("+="),
                         syntax_kind: SyntaxKind::OperatorPlusEqual
                     },
-                    right: Box::new(Node::Token(Token {
-                        start: 7,
-                        len: 9,
-                        // text: String::from("$_t_e_s_t"),
-                        syntax_kind: SyntaxKind::GlobalVariable
-                    })),
+                    right: Box::new(Node::Variable(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 8,
+                            len: 8,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 7,
+                            len: 9,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 15,
-                        // text: String::from("0@ += $_t_e_s_t"),
                         syntax_kind: SyntaxKind::BinaryExpr
                     }
                 })
