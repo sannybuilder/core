@@ -38,7 +38,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                node: Node::Unary(UnaryPrefixExpr {
+                body: vec![Node::Unary(UnaryPrefixExpr {
                     operator: Token {
                         start: 3,
                         len: 1,
@@ -62,7 +62,7 @@ mod tests {
                         len: 3,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
-                })
+                })]
             }
         )
     }
