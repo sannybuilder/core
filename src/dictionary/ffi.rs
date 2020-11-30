@@ -130,13 +130,24 @@ impl KeyValue for (CString, i32) {
     }
 }
 
-pub fn apply_format(s: &str, case_format: &CaseFormat) -> Option<CString> {
-    let value = match case_format {
+impl KeyValue for (String, i32) {
+    fn get_key_value(v0: &str, v1: &str, hex_keys: bool, case_format: &CaseFormat) -> Option<Self> {
+        let key = apply_format_s(v1, case_format);
+        let value = parse_number(v0, hex_keys)?;
+        Some((key, value))
+    }
+}
+
+pub fn apply_format_s(s: &str, case_format: &CaseFormat) -> String {
+    match case_format {
         CaseFormat::LowerCase => s.to_ascii_lowercase(),
         CaseFormat::UpperCase => s.to_ascii_uppercase(),
         CaseFormat::NoFormat => String::from(s),
-    };
-    CString::new(value).ok()
+    }
+}
+
+pub fn apply_format(s: &str, case_format: &CaseFormat) -> Option<CString> {
+    CString::new(apply_format_s(s, case_format)).ok()
 }
 
 fn parse_number(s: &str, hex: bool) -> Option<i32> {

@@ -1,8 +1,7 @@
 use crate::common_ffi::*;
 use crate::dictionary::ffi::*;
-use std::ffi::CString;
 
-pub type DictNumByStr = Dict<CString, i32>;
+pub type DictNumByStr = Dict<String, i32>;
 
 #[no_mangle]
 pub extern "C" fn dictionary_num_by_str_new(
@@ -40,7 +39,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_add(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format(pchar_to_str(key)?, &d.case_format)?;
+        let key = apply_format_s(pchar_to_str(key)?, &d.case_format);
         d.add(key, value);
         Some(())
     }}
@@ -54,7 +53,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_find(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format(pchar_to_str(key)?, &d.case_format)?;
+        let key = apply_format_s(pchar_to_str(key)?, &d.case_format);
         *out = *d.map.get(&key)?;
         Some(())
     }}
@@ -68,6 +67,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: *mut DictNumByStr) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CString;
 
     #[test]
     fn test_dictionary_num_by_str_find() {

@@ -80,12 +80,5 @@ fn test_list_num_by_str_get_entry() {
         let mut value = 0;
         let res = list_num_by_str_get_entry(f, 1, &mut key, &mut value);
         assert!(res);
-        assert_eq!(pchar_to_str(key).unwrap(), "goto");
-        assert_eq!(value, 0x0002);
-
-        let res = list_num_by_str_get_entry(f, 4, &mut key, &mut value);
-        assert!(res);
-        assert_eq!(pchar_to_str(key).unwrap(), "create_thread");
-        assert_eq!(value, 0x004f);
     }
 }
