@@ -6,6 +6,8 @@ pub mod interface;
 use interface::*;
 
 mod binary;
+mod declaration;
+mod expression;
 mod helpers;
 mod literal;
 mod operator;
@@ -14,7 +16,7 @@ mod unary;
 mod variable;
 
 pub fn parse(s: &str) -> R<AST> {
-    all_consuming(map(many1(statement::statement), |body| AST { body }))(Span::from(s))
+    all_consuming(map(many1(declaration::declaration), |body| AST { body }))(Span::from(s))
 }
 
 #[cfg(test)]

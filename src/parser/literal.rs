@@ -22,11 +22,14 @@ pub fn number(s: Span) -> R<Token> {
 }
 
 // combination of letters, digits and underscore, not starting with a digit
-pub fn identifier(s: Span) -> R<Span> {
-    recognize(pair(
-        alt((alpha1, tag("_"))),
-        many0(alt((alphanumeric1, tag("_")))),
-    ))(s)
+pub fn identifier(s: Span) -> R<Token> {
+    map(
+        consumed(pair(
+            alt((alpha1, tag("_"))),
+            many0(alt((alphanumeric1, tag("_")))),
+        )),
+        |(span, _)| Token::from(span, SyntaxKind::Identifier),
+    )(s)
 }
 
 // any combination of letters, digits and underscore

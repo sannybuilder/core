@@ -11,6 +11,8 @@ pub enum SyntaxKind {
     GlobalVariable,
     UnaryPrefixExpr,
     BinaryExpr,
+    ConstDeclaration,
+    ConstInitialization,
 
     OperatorBitwiseNot,      // ~
     OperatorBitwiseAnd,      // &
@@ -66,6 +68,7 @@ pub enum Node {
     Variable(Variable),
     Binary(BinaryExpr),
     Unary(UnaryPrefixExpr),
+    ConstDeclaration(ConstDeclaration),
 }
 
 #[derive(Debug, PartialEq)]
@@ -112,6 +115,18 @@ pub struct SingleVariable {
     pub name: Token,
     pub token: Token,
     pub _type: VariableType,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ConstDeclaration {
+    pub items: Vec<ConstInitialization>,
+    pub token: Token,
+}
+#[derive(Debug, PartialEq)]
+pub struct ConstInitialization {
+    pub name: Token,
+    pub value: Box<Node>,
+    pub token: Token,
 }
 
 #[derive(Debug, PartialEq)]
