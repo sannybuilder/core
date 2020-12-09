@@ -15,11 +15,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v2
     - uses: actions-rs/toolchain@v1.0.6
       with:
+        toolchain: nightly
         target: i686-pc-windows-msvc
         override: true
-    - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
     - name: Run tests
