@@ -1,8 +1,7 @@
 use crate::parser::interface::*;
 
-use crate::parser::binary;
-use crate::parser::helpers;
+use crate::parser::expression;
 
 pub fn statement(s: Span) -> R<Node> {
-    helpers::ws(binary::assignment)(s)
+    expression::expression(s)
 }
