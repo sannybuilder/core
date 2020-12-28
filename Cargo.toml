@@ -14,3 +14,5 @@ crate-type = ["rlib", "cdylib"]
 libc = "0.2.79"
 nom = "6.0.1"
 nom_locate = "3.0.0"
+hotwatch = "0.4.5"
+lazy_static = "1.4.0"
