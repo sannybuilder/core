@@ -9,12 +9,20 @@ pub enum SymbolType {
     Number = 0,
     String = 1,
     Var = 2,
+    Label = 3,
+    ModelName = 4,
 }
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SymbolInfo {
     pub line_number: u32,
     pub _type: SymbolType,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ServerInfo {
+    pub status: i32,
 }
 
 pub struct SymbolInfoMap {
@@ -37,25 +45,24 @@ pub unsafe extern "C" fn language_service_free(server: *mut LanguageServer) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn language_service_client_file_open(
+pub unsafe extern "C" fn language_service_client_connect(
     server: *mut LanguageServer,
     file_name: PChar,
     handle: EditorHandle,
 ) -> bool {
     boolclosure! {{
-        server.as_mut()?.open(pchar_to_str(file_name)?, handle);
+        server.as_mut()?.connect(pchar_to_str(file_name)?, handle);
         Some(())
     }}
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn language_service_client_file_close(
+pub unsafe extern "C" fn language_service_client_disconnect(
     server: *mut LanguageServer,
-    file_name: PChar,
     handle: EditorHandle,
 ) -> bool {
     boolclosure! {{
-        server.as_mut()?.close(pchar_to_str(file_name)?, handle);
+        server.as_mut()?.disconnect(handle);
         Some(())
     }}
 }
@@ -73,6 +80,19 @@ pub unsafe extern "C" fn language_service_find(
         let s = server.find(pchar_to_str(symbol)?, editor, pchar_to_str(file_name)?)?;
         out_value.as_mut()?._type = s._type;
         out_value.as_mut()?.line_number = s.line_number;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn language_service_info(
+    server: *mut LanguageServer,
+    out_value: *mut ServerInfo,
+) -> bool {
+    boolclosure! {{
+        let _server = server.as_mut()?;
+        let info = out_value.as_mut()?;
+        info.status = 1;
         Some(())
     }}
 }
