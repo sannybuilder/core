@@ -19,6 +19,7 @@ lazy_static! {
         Mutex::new(HashMap::new());
     static ref WATCHED_FILES: Mutex<HashMap<String, HashSet<EditorHandle>>> =
         Mutex::new(HashMap::new());
+    static ref DOCUMENT_MAP: Mutex<HashMap<EditorHandle, String>> = Mutex::new(HashMap::new());
     static ref RESERVED_WORDS: Mutex<DictNumByStr> = Mutex::new(DictNumByStr::new(
         Duplicates::Replace,
         CaseFormat::LowerCase,
@@ -46,25 +47,33 @@ impl LanguageServer {
         }
     }
 
-    pub fn open(&mut self, file_name: &str, handle: EditorHandle) {
+    pub fn connect(&mut self, file_name: &str, handle: EditorHandle) {
         let dict = RESERVED_WORDS.lock().unwrap();
+        let mut documents = DOCUMENT_MAP.lock().unwrap();
+        let main_file = String::from(file_name);
+        documents.insert(handle, main_file.clone());
+        drop(documents);
+
+        // todo: maybe merge this with initial scan
         if let Some(tree) = scanner::document_tree(file_name, &dict) {
             for file in tree {
-                self.start_watching(file, file_name, handle);
+                self.start_watching(file, handle);
             }
         }
-
-        let notify = self.notify;
-        let main_file1 = String::from(file_name);
 
         // needed to unlock the RESERVED_WORDS mutex for scan routine
         drop(dict);
 
         // spawn initial scan for the opened document
-        thread::spawn(move || LanguageServer::scan(&main_file1, &main_file1, notify));
+        let notify = self.notify;
+        thread::spawn(move || {
+            let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
+            let dict = RESERVED_WORDS.lock().unwrap();
+            LanguageServer::scan_file(handle, &main_file, &mut symbol_table, &dict, &notify)
+        });
     }
 
-    fn start_watching(&mut self, file_name: String, main_file: &str, handle: EditorHandle) {
+    fn start_watching(&mut self, file_name: String, handle: EditorHandle) {
         let mut files = WATCHED_FILES.lock().unwrap();
         match files.get_mut(&file_name) {
             Some(v) => {
@@ -78,49 +87,68 @@ impl LanguageServer {
         }
         let notify = self.notify;
         let file_name1 = file_name.clone();
-        let main_file1 = String::from(main_file);
 
         self.watcher
             .watch(file_name.as_str(), move |event| match event {
-                hotwatch::Event::Write(_) => LanguageServer::scan(&file_name1, &main_file1, notify),
+                hotwatch::Event::Write(_) => LanguageServer::scan(&file_name1, notify),
                 _ => {
                     // todo: check out other events, e.g. file delete or move
                 }
             });
     }
 
-    fn scan(file_name: &String, main_file: &String, notify: NotifyCallback) {
+    fn scan(file_name: &String, notify: NotifyCallback) {
         let files = WATCHED_FILES.lock().unwrap();
+        let documents = DOCUMENT_MAP.lock().unwrap();
+        let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
+        let dict = RESERVED_WORDS.lock().unwrap();
         if let Some(handles) = files.get(file_name.as_str()) {
             for &handle in handles {
                 // todo: parallel scan?
-                let mut table = SymbolTable::new();
-
-                let dict = RESERVED_WORDS.lock().unwrap();
-
-                if let Some(tree) = scanner::document_tree(main_file.as_str(), &dict) {
-                    for file in tree {
-                        if let Some(constants) = scanner::find_constants(file, &dict) {
-                            table.add(constants);
-                        }
-                    }
+                if let Some(file_name) = documents.get(&handle) {
+                    LanguageServer::scan_file(handle, file_name, &mut symbol_table, &dict, &notify);
                 }
-
-                SYMBOL_TABLES.lock().unwrap().insert(handle, table);
-                notify(handle);
             }
         }
     }
 
-    pub fn close(&mut self, file_name: &str, handle: EditorHandle) {
-        SYMBOL_TABLES.lock().unwrap().remove(&handle);
-        let mut f = WATCHED_FILES.lock().unwrap();
-        if let Some(v) = f.get_mut(file_name) {
-            v.remove(&handle);
-            if v.len() == 0 {
-                self.watcher.unwatch(file_name);
+    fn scan_file(
+        handle: EditorHandle,
+        file_name: &String,
+        symbol_table: &mut HashMap<EditorHandle, SymbolTable>,
+        reserved_words: &DictNumByStr,
+        notify: &NotifyCallback,
+    ) {
+        let mut table = SymbolTable::new();
+        if let Some(tree) = scanner::document_tree(file_name.as_str(), &reserved_words) {
+            for file in tree {
+                if let Some(constants) = scanner::find_constants(file, &reserved_words) {
+                    table.add(constants);
+                }
             }
         }
+
+        symbol_table.insert(handle, table);
+        notify(handle);
+    }
+
+    pub fn disconnect(&mut self, handle: EditorHandle) {
+        SYMBOL_TABLES.lock().unwrap().remove(&handle);
+        DOCUMENT_MAP.lock().unwrap().remove(&handle);
+
+        // disconnect editor from all files and stop watching orphan references
+        let _drained = WATCHED_FILES
+            .lock()
+            .unwrap()
+            .drain_filter(|k, v| {
+                v.remove(&handle);
+                if v.len() == 0 {
+                    self.watcher.unwatch(k);
+                    return true;
+                }
+                return false;
+            })
+            .collect::<Vec<_>>();
     }
 
     pub fn find(

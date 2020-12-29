@@ -3,6 +3,7 @@ use crate::dictionary::dictionary_num_by_str::DictNumByStr;
 use std::fs;
 use std::path::Path;
 
+// from compiler.ini
 const TOKEN_INCLUDE: i32 = 103;
 const TOKEN_CONST: i32 = 65;
 const TOKEN_END: i32 = 255;
@@ -111,6 +112,10 @@ pub fn find_constants<'a>(
                             _type = SymbolType::Var
                         } else if value.starts_with('"') || value.starts_with('\'') {
                             _type = SymbolType::String
+                        } else if value.starts_with('#') {
+                            _type = SymbolType::ModelName
+                        } else if value.starts_with('@') {
+                            _type = SymbolType::Label
                         } else if let Some(_) = value.parse::<f32>().ok() {
                             _type = SymbolType::Number
                         } else {
