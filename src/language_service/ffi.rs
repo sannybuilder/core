@@ -19,10 +19,8 @@ pub struct SymbolInfo {
     pub _type: SymbolType,
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct ServerInfo {
-    pub status: i32,
+pub struct DocumentInfo {
+    pub is_active: bool,
 }
 
 pub struct SymbolInfoMap {
@@ -30,13 +28,23 @@ pub struct SymbolInfoMap {
     pub line_number: u32,
     pub _type: SymbolType,
 }
+#[derive(Clone, Copy)]
+pub enum Status {
+    Ready = 1,
+    Scanning = 2,
+}
 
 pub type EditorHandle = u32;
 pub type NotifyCallback = extern "C" fn(EditorHandle);
 
+pub type StatusChangeCallback = extern "C" fn(EditorHandle, i32);
+
 #[no_mangle]
-pub extern "C" fn language_service_new(cb: NotifyCallback) -> *mut LanguageServer {
-    ptr_new(LanguageServer::new(cb))
+pub extern "C" fn language_service_new(
+    cb1: NotifyCallback,
+    cb2: StatusChangeCallback,
+) -> *mut LanguageServer {
+    ptr_new(LanguageServer::new(cb1, cb2))
 }
 
 #[no_mangle]
@@ -71,13 +79,13 @@ pub unsafe extern "C" fn language_service_client_disconnect(
 pub unsafe extern "C" fn language_service_find(
     server: *mut LanguageServer,
     symbol: PChar,
-    editor: EditorHandle,
+    handle: EditorHandle,
     file_name: PChar,
     out_value: *mut SymbolInfo,
 ) -> bool {
     boolclosure! {{
         let server = server.as_mut()?;
-        let s = server.find(pchar_to_str(symbol)?, editor, pchar_to_str(file_name)?)?;
+        let s = server.find(pchar_to_str(symbol)?, handle, pchar_to_str(file_name)?)?;
         out_value.as_mut()?._type = s._type;
         out_value.as_mut()?.line_number = s.line_number;
         Some(())
@@ -87,12 +95,12 @@ pub unsafe extern "C" fn language_service_find(
 #[no_mangle]
 pub unsafe extern "C" fn language_service_info(
     server: *mut LanguageServer,
-    out_value: *mut ServerInfo,
+    handle: EditorHandle,
+    out_value: *mut DocumentInfo,
 ) -> bool {
     boolclosure! {{
-        let _server = server.as_mut()?;
         let info = out_value.as_mut()?;
-        info.status = 1;
+        info.is_active = server.as_mut()?.get_document_info(handle).is_active;
         Some(())
     }}
 }

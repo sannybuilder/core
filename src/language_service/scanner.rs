@@ -64,10 +64,10 @@ pub fn document_tree<'a>(file_name: &'a str, dict: &DictNumByStr) -> Option<Vec<
 }
 
 pub fn find_constants<'a>(
-    file_name: String,
+    file_name: &String,
     dict: &DictNumByStr,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
-    let content = fs::read_to_string(&file_name).ok()?;
+    let content = fs::read_to_string(file_name).ok()?;
     let mut lines = content.lines().enumerate();
     let mut res = vec![];
     let mut inside_const = false;
