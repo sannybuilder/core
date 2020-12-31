@@ -57,9 +57,10 @@ pub unsafe extern "C" fn language_service_client_connect(
     server: *mut LanguageServer,
     file_name: PChar,
     handle: EditorHandle,
+    static_constants_file: PChar,
 ) -> bool {
     boolclosure! {{
-        server.as_mut()?.connect(pchar_to_str(file_name)?, handle);
+        server.as_mut()?.connect(pchar_to_str(file_name)?, handle, pchar_to_str(static_constants_file)?);
         Some(())
     }}
 }

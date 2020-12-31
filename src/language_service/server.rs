@@ -29,6 +29,8 @@ lazy_static! {
         false,
     ));
     static ref FILE_WATCHER: Mutex<FileWatcher> = Mutex::new(FileWatcher::new());
+    static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
+        Mutex::new(HashMap::new());
 }
 
 pub struct LanguageServer {
@@ -48,11 +50,19 @@ impl LanguageServer {
         }
     }
 
-    pub fn connect(&mut self, file_name: &str, handle: EditorHandle) {
-        let mut documents = DOCUMENT_MAP.lock().unwrap();
+    pub fn connect(&mut self, file_name: &str, handle: EditorHandle, static_constants_file: &str) {
         let main_file = String::from(file_name);
-        documents.insert(handle, main_file.clone());
-        drop(documents);
+        DOCUMENT_MAP
+            .lock()
+            .unwrap()
+            .insert(handle, main_file.clone());
+
+        IMPLICIT_INCLUDES
+            .lock()
+            .unwrap()
+            .insert(handle, vec![String::from(static_constants_file)]);
+
+        let static_constants_file = String::from(static_constants_file);
 
         // spawn initial scan for the opened document
         let notify = self.notify;
@@ -62,7 +72,9 @@ impl LanguageServer {
             status_change(handle, Status::Scanning as i32);
             let dict = RESERVED_WORDS.lock().unwrap();
 
-            if let Some(tree) = scanner::document_tree(&main_file, &dict) {
+            if let Some(tree) =
+                scanner::document_tree(&main_file, &dict, &vec![static_constants_file])
+            {
                 let mut watcher = FILE_WATCHER.lock().unwrap();
                 let mut table = SymbolTable::new();
 
@@ -118,6 +130,7 @@ impl LanguageServer {
         let documents = DOCUMENT_MAP.lock().unwrap();
         let dict = RESERVED_WORDS.lock().unwrap();
         let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
+        let implicit_includes = IMPLICIT_INCLUDES.lock().unwrap();
 
         if let Some(handles) = files.get(file_name.as_str()) {
             for &handle in handles {
@@ -125,7 +138,11 @@ impl LanguageServer {
                 status_change(handle, Status::Scanning as i32);
                 if let Some(file_name) = documents.get(&handle) {
                     let mut table = SymbolTable::new();
-                    if let Some(tree) = scanner::document_tree(file_name.as_str(), &dict) {
+
+                    let v = vec![];
+                    let includes = implicit_includes.get(&handle).unwrap_or(&v);
+                    if let Some(tree) = scanner::document_tree(file_name.as_str(), &dict, includes)
+                    {
                         for file in tree {
                             if let Some(constants) = scanner::find_constants(&file, &dict) {
                                 table.add(constants);
@@ -144,6 +161,7 @@ impl LanguageServer {
     pub fn disconnect(&mut self, handle: EditorHandle) {
         SYMBOL_TABLES.lock().unwrap().remove(&handle);
         DOCUMENT_MAP.lock().unwrap().remove(&handle);
+        IMPLICIT_INCLUDES.lock().unwrap().remove(&handle);
         let mut watcher = FILE_WATCHER.lock().unwrap();
 
         // disconnect editor from all files and stop watching orphan references
@@ -172,7 +190,7 @@ impl LanguageServer {
         let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
         Some(SymbolInfo {
             line_number: if !map.file_name.eq(file_name) {
-                1
+                0
             } else {
                 map.line_number
             },
