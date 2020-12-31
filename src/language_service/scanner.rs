@@ -14,8 +14,17 @@ const TOKEN_LONGSTRING: i32 = 4;
 const TOKEN_HANDLE: i32 = 5;
 const TOKEN_BOOL: i32 = 6;
 
-fn document_tree_walk<'a>(file_name: String, dict: &DictNumByStr) -> Option<Vec<String>> {
+fn document_tree_walk<'a>(
+    file_name: String,
+    reserved_words: &DictNumByStr,
+    mut refs: &mut Vec<String>,
+) -> Option<Vec<String>> {
     let content = fs::read_to_string(&file_name).ok()?;
+    if refs.contains(&file_name) {
+        return None;
+    } else {
+        refs.push(file_name.clone());
+    }
     let mut files = content
         .lines()
         .filter_map(|x| {
@@ -23,7 +32,7 @@ fn document_tree_walk<'a>(file_name: String, dict: &DictNumByStr) -> Option<Vec<
             let mut words = x.split_ascii_whitespace();
             let first = words.next()?.to_ascii_lowercase();
 
-            if let Some(token) = dict.map.get(&first) {
+            if let Some(token) = reserved_words.map.get(&first) {
                 if token == &TOKEN_INCLUDE {
                     let mut include_path = words.collect::<String>();
 
@@ -33,7 +42,8 @@ fn document_tree_walk<'a>(file_name: String, dict: &DictNumByStr) -> Option<Vec<
 
                     return Some(document_tree_walk(
                         resolve_path(include_path, &file_name)?,
-                        dict,
+                        reserved_words,
+                        &mut refs,
                     )?);
                 }
             }
@@ -59,13 +69,26 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
     return Some(String::from(abs_name.to_str()?));
 }
 
-pub fn document_tree<'a>(file_name: &'a str, dict: &DictNumByStr) -> Option<Vec<String>> {
-    Some(document_tree_walk(file_name.to_string(), dict)?)
+pub fn document_tree<'a>(
+    file_name: &'a str,
+    reserved_words: &DictNumByStr,
+    implicit_includes: &Vec<String>,
+) -> Option<Vec<String>> {
+    let mut refs: Vec<String> = vec![];
+    let mut tree = document_tree_walk(file_name.to_string(), reserved_words, &mut refs)?;
+
+    for include_path in implicit_includes {
+        tree.insert(
+            tree.len() - 1,
+            resolve_path(include_path.to_owned(), &file_name.to_string())?,
+        );
+    }
+    Some(tree)
 }
 
 pub fn find_constants<'a>(
     file_name: &String,
-    dict: &DictNumByStr,
+    reserved_words: &DictNumByStr,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let content = fs::read_to_string(file_name).ok()?;
     let mut lines = content.lines().enumerate();
@@ -78,7 +101,7 @@ pub fn find_constants<'a>(
         }
         let mut words = line.split_ascii_whitespace();
         let first = words.next().unwrap_or("");
-        match dict.map.get(first) {
+        match reserved_words.map.get(first) {
             Some(token) => match *token {
                 TOKEN_CONST => inside_const = true,
                 TOKEN_END if inside_const => inside_const = false,
@@ -88,7 +111,7 @@ pub fn find_constants<'a>(
                     let name = words.next().unwrap_or("");
                     if !name.is_empty() {
                         res.push((
-                            String::from(name),
+                            name.to_ascii_lowercase(),
                             SymbolInfoMap {
                                 line_number: line_number as u32,
                                 _type: SymbolType::Var,
@@ -103,32 +126,18 @@ pub fn find_constants<'a>(
                 // todo: try nom parser
                 let mut tokens = line.split('=');
 
-                if let Some(mut name) = tokens.next() {
-                    if let Some(mut value) = tokens.next() {
-                        name = name.trim();
-                        value = value.trim();
-                        let mut _type = SymbolType::Number;
-                        if value.starts_with('$') || value.ends_with('@') {
-                            _type = SymbolType::Var
-                        } else if value.starts_with('"') || value.starts_with('\'') {
-                            _type = SymbolType::String
-                        } else if value.starts_with('#') {
-                            _type = SymbolType::ModelName
-                        } else if value.starts_with('@') {
-                            _type = SymbolType::Label
-                        } else if let Some(_) = value.parse::<f32>().ok() {
-                            _type = SymbolType::Number
-                        } else {
-                            continue;
+                if let Some(name) = tokens.next() {
+                    if let Some(value) = tokens.next() {
+                        if let Some(_type) = get_type(value.trim()) {
+                            res.push((
+                                name.trim().to_ascii_lowercase(),
+                                SymbolInfoMap {
+                                    line_number: line_number as u32,
+                                    _type,
+                                    file_name: file_name.clone(),
+                                },
+                            ))
                         }
-                        res.push((
-                            String::from(name),
-                            SymbolInfoMap {
-                                line_number: line_number as u32,
-                                _type,
-                                file_name: file_name.clone(),
-                            },
-                        ))
                     }
                 }
             }
@@ -139,6 +148,25 @@ pub fn find_constants<'a>(
     }
 
     Some(res)
+}
+
+pub fn get_type(value: &str) -> Option<SymbolType> {
+    if value.starts_with('$') || value.ends_with('@') {
+        return Some(SymbolType::Var);
+    }
+    if value.starts_with('"') || value.starts_with('\'') {
+        return Some(SymbolType::String);
+    }
+    if value.starts_with('#') {
+        return Some(SymbolType::ModelName);
+    }
+    if value.starts_with('@') {
+        return Some(SymbolType::Label);
+    }
+    if let Some(_) = value.parse::<f32>().ok() {
+        return Some(SymbolType::Number);
+    }
+    return None;
 }
 
 #[cfg(test)]
