@@ -166,6 +166,9 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
     if let Some(_) = value.parse::<f32>().ok() {
         return Some(SymbolType::Number);
     }
+    if value.starts_with("0x") || value.starts_with("-0x") {
+        return Some(SymbolType::Number);
+    }
     return None;
 }
 
