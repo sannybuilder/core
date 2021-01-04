@@ -1,4 +1,4 @@
-use super::ffi::{SymbolInfoMap, SymbolType};
+use super::ffi::{Source, SymbolInfoMap, SymbolType};
 use crate::dictionary::dictionary_num_by_str::DictNumByStr;
 use std::fs;
 use std::path::Path;
@@ -15,11 +15,11 @@ const TOKEN_HANDLE: i32 = 5;
 const TOKEN_BOOL: i32 = 6;
 
 fn document_tree_walk<'a>(
+    content: &String,
     file_name: String,
     reserved_words: &DictNumByStr,
     mut refs: &mut Vec<String>,
 ) -> Option<Vec<String>> {
-    let content = fs::read_to_string(&file_name).ok()?;
     if refs.contains(&file_name) {
         return None;
     } else {
@@ -40,8 +40,11 @@ fn document_tree_walk<'a>(
                         include_path.pop();
                     }
 
+                    let path = resolve_path(include_path, &file_name)?;
+                    let content = fs::read_to_string(&path).ok()?;
                     return Some(document_tree_walk(
-                        resolve_path(include_path, &file_name)?,
+                        &content,
+                        path,
                         reserved_words,
                         &mut refs,
                     )?);
@@ -70,33 +73,65 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
 }
 
 pub fn document_tree<'a>(
-    file_name: &'a str,
+    text: &String,
     reserved_words: &DictNumByStr,
     implicit_includes: &Vec<String>,
+    source: &Source,
 ) -> Option<Vec<String>> {
-    let mut refs: Vec<String> = vec![];
-    let mut tree = document_tree_walk(file_name.to_string(), reserved_words, &mut refs)?;
+    match source {
+        Source::File(file_name) => {
+            let mut refs: Vec<String> = vec![];
+            let mut tree =
+                document_tree_walk(text, file_name.to_string(), reserved_words, &mut refs)?;
 
-    for include_path in implicit_includes {
-        tree.insert(
-            tree.len() - 1,
-            resolve_path(include_path.to_owned(), &file_name.to_string())?,
-        );
+            tree.pop(); // remove the source document from the tree as we scan it in memory
+
+            tree.extend(implicit_includes.iter().filter_map(|include_path| {
+                Some(resolve_path(
+                    include_path.to_owned(),
+                    &file_name.to_string(),
+                )?)
+            }));
+
+            Some(tree)
+        }
+        Source::Memory => Some(implicit_includes.clone()),
     }
-    Some(tree)
 }
 
-pub fn find_constants<'a>(
+pub fn find_constants_from_file(
     file_name: &String,
     reserved_words: &DictNumByStr,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let content = fs::read_to_string(file_name).ok()?;
+    find_constants(&content, reserved_words, &Source::File(file_name.clone()))
+}
+
+pub fn find_constants_from_memory(
+    content: &String,
+    reserved_words: &DictNumByStr,
+) -> Option<Vec<(String, SymbolInfoMap)>> {
+    find_constants(&content, reserved_words, &Source::Memory)
+}
+
+pub fn find_constants<'a>(
+    content: &String,
+    reserved_words: &DictNumByStr,
+    source: &Source,
+) -> Option<Vec<(String, SymbolInfoMap)>> {
     let mut lines = content.lines().enumerate();
     let mut res = vec![];
     let mut inside_const = false;
+    let file_name = match source {
+        Source::File(path) => Some(path.clone()),
+        Source::Memory => None,
+    };
     while let Some((line_number, mut line)) = lines.next() {
         line = line.trim();
-        if line.is_empty() || line.starts_with("//") {
+        if line.contains("//") {
+            line = line.split("//").next().unwrap();
+        }
+        if line.is_empty() {
             continue;
         }
         let mut words = line.split_ascii_whitespace();
@@ -151,17 +186,19 @@ pub fn find_constants<'a>(
 }
 
 pub fn get_type(value: &str) -> Option<SymbolType> {
-    if value.starts_with('$') || value.ends_with('@') {
-        return Some(SymbolType::Var);
-    }
-    if value.starts_with('"') || value.starts_with('\'') {
-        return Some(SymbolType::String);
-    }
-    if value.starts_with('#') {
-        return Some(SymbolType::ModelName);
-    }
-    if value.starts_with('@') {
-        return Some(SymbolType::Label);
+    if value.len() > 1 {
+        if value.starts_with('$') || value.ends_with('@') {
+            return Some(SymbolType::Var);
+        }
+        if value.starts_with('"') || value.starts_with('\'') {
+            return Some(SymbolType::String);
+        }
+        if value.starts_with('#') {
+            return Some(SymbolType::ModelName);
+        }
+        if value.starts_with('@') {
+            return Some(SymbolType::Label);
+        }
     }
     if let Some(_) = value.parse::<f32>().ok() {
         return Some(SymbolType::Number);
