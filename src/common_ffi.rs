@@ -8,7 +8,11 @@ pub fn pchar_to_string<'a>(s: PChar) -> Option<String> {
 }
 
 pub fn pchar_to_str<'a>(s: PChar) -> Option<&'a str> {
-    unsafe { Some(CStr::from_ptr(s).to_str().ok()?) }
+    if s.is_null() {
+        None
+    } else {
+        unsafe { Some(CStr::from_ptr(s).to_str().ok()?) }
+    }
 }
 
 #[no_mangle]
