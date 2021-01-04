@@ -1,5 +1,8 @@
 use super::{
-    ffi::{DocumentInfo, EditorHandle, NotifyCallback, Status, StatusChangeCallback, SymbolInfo},
+    ffi::{
+        DocumentInfo, EditorHandle, NotifyCallback, Source, Status, StatusChangeCallback,
+        SymbolInfo,
+    },
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
@@ -10,16 +13,23 @@ use crate::dictionary::{
 use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
-    sync::Mutex,
+    sync::{
+        mpsc::{channel, Sender, TryRecvError},
+        Mutex,
+    },
     thread,
+    time::Duration,
 };
+
+use simplelog::*;
+use std::fs::File;
 
 lazy_static! {
     static ref SYMBOL_TABLES: Mutex<HashMap<EditorHandle, SymbolTable>> =
         Mutex::new(HashMap::new());
     static ref WATCHED_FILES: Mutex<HashMap<String, HashSet<EditorHandle>>> =
         Mutex::new(HashMap::new());
-    static ref DOCUMENT_MAP: Mutex<HashMap<EditorHandle, String>> = Mutex::new(HashMap::new());
+    static ref SOURCE_MAP: Mutex<HashMap<EditorHandle, Source>> = Mutex::new(HashMap::new());
     static ref RESERVED_WORDS: Mutex<DictNumByStr> = Mutex::new(DictNumByStr::new(
         Duplicates::Replace,
         CaseFormat::LowerCase,
@@ -34,8 +44,9 @@ lazy_static! {
 }
 
 pub struct LanguageServer {
-    notify: NotifyCallback,
-    status_change: StatusChangeCallback,
+    pub notify: NotifyCallback,
+    pub status_change: StatusChangeCallback,
+    pub message_queue: Sender<(EditorHandle, String)>,
 }
 
 impl LanguageServer {
@@ -44,123 +55,184 @@ impl LanguageServer {
             .lock()
             .unwrap()
             .load_file("data\\compiler.ini");
+
+        if cfg!(debug_assertions) {
+            let config = ConfigBuilder::new().set_time_to_local(true).build();
+
+            let _ = WriteLogger::init(
+                LevelFilter::max(),
+                config,
+                File::create("core.log").unwrap(),
+            );
+        }
+        log::debug!("Language service created");
+
+        let message_queue = LanguageServer::setup_message_queue(notify, status_change);
+
         Self {
             notify,
             status_change,
+            message_queue,
         }
     }
 
-    pub fn connect(&mut self, file_name: &str, handle: EditorHandle, static_constants_file: &str) {
-        let main_file = String::from(file_name);
-        DOCUMENT_MAP
-            .lock()
-            .unwrap()
-            .insert(handle, main_file.clone());
+    fn setup_message_queue(
+        notify: NotifyCallback,
+        status_change: StatusChangeCallback,
+    ) -> Sender<(EditorHandle, String)> {
+        let (message_queue, receiver) = channel();
+        thread::spawn(move || loop {
+            let mut current = 0;
+            let mut text = String::new();
+            loop {
+                match receiver.try_recv() {
+                    Ok((handle, t)) => {
+                        log::debug!("Got signal from client {}", handle);
+                        current = handle;
+                        text = t;
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => return,
+                }
+            }
+            if current != 0 {
+                LanguageServer::scan_client(current, notify, status_change, text);
+            }
+            thread::sleep(Duration::from_millis(300));
+        });
 
+        message_queue
+    }
+
+    pub fn connect(&mut self, source: Source, handle: EditorHandle, static_constants_file: &str) {
+        log::debug!("New client {} connected with source {:?}", handle, source);
+
+        SOURCE_MAP.lock().unwrap().insert(handle, source.clone());
+
+        let static_constants_file = String::from(static_constants_file);
         IMPLICIT_INCLUDES
             .lock()
             .unwrap()
-            .insert(handle, vec![String::from(static_constants_file)]);
+            .insert(handle, vec![static_constants_file.clone()]);
 
-        let static_constants_file = String::from(static_constants_file);
-
-        // spawn initial scan for the opened document
-        let notify = self.notify;
         let status_change = self.status_change;
-
-        thread::spawn(move || {
-            status_change(handle, Status::Scanning as i32);
-            let dict = RESERVED_WORDS.lock().unwrap();
-
-            if let Some(tree) =
-                scanner::document_tree(&main_file, &dict, &vec![static_constants_file])
-            {
-                let mut watcher = FILE_WATCHER.lock().unwrap();
-                let mut table = SymbolTable::new();
-
-                for file in tree {
-                    LanguageServer::start_watching(
-                        &mut watcher,
-                        &file,
-                        handle,
-                        notify,
-                        status_change,
-                    );
-                    if let Some(constants) = scanner::find_constants(&file, &dict) {
-                        table.add(constants);
-                    }
-                }
-                SYMBOL_TABLES.lock().unwrap().insert(handle, table);
-                notify(handle);
-            }
-            status_change(handle, Status::Ready as i32);
-        });
+        status_change(handle, Status::PendingUpdate);
     }
 
-    fn start_watching(
-        watcher: &mut FileWatcher,
-        file_name: &String,
+    fn rescan(file_name: &String, _notify: NotifyCallback, status_change: StatusChangeCallback) {
+        log::debug!("File {} has changed", file_name);
+        let files = WATCHED_FILES.lock().unwrap();
+
+        if let Some(handles) = files.get(file_name.as_str()) {
+            log::debug!("Found {} dependent clients", handles.len());
+            for &handle in handles {
+                status_change(handle, Status::PendingUpdate)
+            }
+        }
+    }
+
+    fn update_watchers(
+        tree: &Vec<String>,
         handle: EditorHandle,
         notify: NotifyCallback,
         status_change: StatusChangeCallback,
     ) {
-        let mut files = WATCHED_FILES.lock().unwrap();
-        match files.get_mut(file_name) {
-            Some(v) => {
-                v.insert(handle);
-            }
-            None => {
-                let mut set = HashSet::new();
-                set.insert(handle);
-                files.insert(file_name.clone(), set);
-            }
-        }
-        let file_name1 = file_name.clone();
+        log::debug!("Updating file watchers");
 
-        watcher.watch(file_name.as_str(), move |event| match event {
-            hotwatch::Event::Write(_) => LanguageServer::rescan(&file_name1, notify, status_change),
-            _ => {
-                // todo: check out other events, e.g. file delete or move
-            }
-        });
-    }
+        let mut watched_files = WATCHED_FILES.lock().unwrap();
+        let mut watcher = FILE_WATCHER.lock().unwrap();
 
-    fn rescan(file_name: &String, notify: NotifyCallback, status_change: StatusChangeCallback) {
-        let files = WATCHED_FILES.lock().unwrap();
-        let documents = DOCUMENT_MAP.lock().unwrap();
-        let dict = RESERVED_WORDS.lock().unwrap();
-        let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
-        let implicit_includes = IMPLICIT_INCLUDES.lock().unwrap();
-
-        if let Some(handles) = files.get(file_name.as_str()) {
-            for &handle in handles {
-                // todo: parallel scan?
-                status_change(handle, Status::Scanning as i32);
-                if let Some(file_name) = documents.get(&handle) {
-                    let mut table = SymbolTable::new();
-
-                    let v = vec![];
-                    let includes = implicit_includes.get(&handle).unwrap_or(&v);
-                    if let Some(tree) = scanner::document_tree(file_name.as_str(), &dict, includes)
-                    {
-                        for file in tree {
-                            if let Some(constants) = scanner::find_constants(&file, &dict) {
-                                table.add(constants);
-                            }
-                        }
+        // remove handle from dereferenced files
+        let _drained = watched_files
+            .drain_filter(|k, v| {
+                if !tree.contains(k) && v.contains(&handle) {
+                    v.remove(&handle);
+                    if v.len() == 0 {
+                        watcher.unwatch(k);
+                        return true;
                     }
+                }
+                return false;
+            })
+            .collect::<Vec<_>>();
 
-                    symbol_table.insert(handle, table);
-                    notify(handle);
-                    status_change(handle, Status::Ready as i32);
+        // add new references
+        for file_name in tree {
+            match watched_files.get_mut(file_name) {
+                Some(handles) => {
+                    handles.insert(handle);
+                }
+                None => {
+                    let mut set = HashSet::new();
+                    set.insert(handle);
+                    watched_files.insert(file_name.clone(), set);
+
+                    let file_name1 = file_name.clone();
+                    watcher.watch(file_name.as_str(), move |event| match event {
+                        hotwatch::Event::Write(_) => {
+                            LanguageServer::rescan(&file_name1, notify, status_change)
+                        }
+                        _ => {
+                            // todo: check out other events, e.g. file delete or move
+                        }
+                    });
                 }
             }
         }
     }
 
+    pub fn scan_client(
+        handle: EditorHandle,
+        notify: NotifyCallback,
+        status_change: StatusChangeCallback,
+        text: String,
+    ) {
+        log::debug!("Spawn scan for client {}", handle);
+        status_change(handle, Status::Scanning);
+        let sources = SOURCE_MAP.lock().unwrap();
+        let dict = RESERVED_WORDS.lock().unwrap();
+        let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
+        let implicit_includes = IMPLICIT_INCLUDES.lock().unwrap();
+
+        log::debug!("Reading source to build document tree");
+        if let Some(source) = sources.get(&handle) {
+            let mut table = SymbolTable::new();
+
+            let v = vec![];
+            let includes = implicit_includes.get(&handle).unwrap_or(&v);
+
+            // todo: cache includes and not re-read them if they did not change
+            if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
+                log::debug!("Document tree is ready: {} child entries", tree.len());
+
+                LanguageServer::update_watchers(&tree, handle, notify, status_change);
+                for file in tree {
+                    log::debug!("Fetch symbols from file {}", file);
+                    if let Some(constants) = scanner::find_constants_from_file(&file, &dict) {
+                        log::debug!("Found {} symbols", constants.len());
+                        table.add(constants);
+                    }
+                }
+            }
+
+            log::debug!("Fetch symbols from opened document");
+            if let Some(constants) = scanner::find_constants_from_memory(&text, &dict) {
+                log::debug!("Found {} symbols", constants.len());
+                table.add(constants);
+            }
+
+            symbol_table.insert(handle, table);
+            notify(handle);
+            status_change(handle, Status::Ready);
+        }
+
+        log::debug!("Finalize scan for client: {}", handle);
+    }
+
     pub fn disconnect(&mut self, handle: EditorHandle) {
+        log::debug!("Client {} disconnected", handle);
         SYMBOL_TABLES.lock().unwrap().remove(&handle);
-        DOCUMENT_MAP.lock().unwrap().remove(&handle);
+        SOURCE_MAP.lock().unwrap().remove(&handle);
         IMPLICIT_INCLUDES.lock().unwrap().remove(&handle);
         let mut watcher = FILE_WATCHER.lock().unwrap();
 
@@ -179,17 +251,12 @@ impl LanguageServer {
             .collect::<Vec<_>>();
     }
 
-    pub fn find(
-        &mut self,
-        symbol: &str,
-        handle: EditorHandle,
-        file_name: &str,
-    ) -> Option<SymbolInfo> {
+    pub fn find(&mut self, symbol: &str, handle: EditorHandle) -> Option<SymbolInfo> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
         let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
         Some(SymbolInfo {
-            line_number: if !map.file_name.eq(file_name) {
+            line_number: if map.file_name.is_some() {
                 0
             } else {
                 map.line_number
