@@ -71,31 +71,6 @@ impl LanguageServer {
         }
     }
 
-    fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
-        let (message_queue, receiver) = channel();
-        thread::spawn(move || loop {
-            let mut current = 0;
-            let mut text = String::new();
-            loop {
-                match receiver.try_recv() {
-                    Ok((handle, t)) => {
-                        log::debug!("Got signal from client {}", handle);
-                        current = handle;
-                        text = t;
-                    }
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return,
-                }
-            }
-            if current != 0 {
-                LanguageServer::scan_client(current, status_change, text);
-            }
-            thread::sleep(Duration::from_millis(300));
-        });
-
-        message_queue
-    }
-
     pub fn connect(&mut self, source: Source, handle: EditorHandle, static_constants_file: &str) {
         log::debug!("New client {} connected with source {:?}", handle, source);
 
@@ -121,6 +96,73 @@ impl LanguageServer {
                 status_change(handle, Status::PendingScan)
             }
         }
+    }
+
+    pub fn disconnect(&mut self, handle: EditorHandle) {
+        log::debug!("Client {} disconnected", handle);
+        SYMBOL_TABLES.lock().unwrap().remove(&handle);
+        SOURCE_MAP.lock().unwrap().remove(&handle);
+        IMPLICIT_INCLUDES.lock().unwrap().remove(&handle);
+        let mut watcher = FILE_WATCHER.lock().unwrap();
+
+        // disconnect editor from all files and stop watching orphan references
+        let _drained = WATCHED_FILES
+            .lock()
+            .unwrap()
+            .drain_filter(|k, v| {
+                v.remove(&handle);
+                if v.len() == 0 {
+                    watcher.unwatch(k);
+                    return true;
+                }
+                return false;
+            })
+            .collect::<Vec<_>>();
+    }
+
+    pub fn find(&mut self, symbol: &str, handle: EditorHandle) -> Option<SymbolInfo> {
+        let st = SYMBOL_TABLES.lock().unwrap();
+        let table = st.get(&handle)?;
+        let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
+        Some(SymbolInfo {
+            line_number: if map.file_name.is_some() {
+                0
+            } else {
+                map.line_number
+            },
+            _type: map._type,
+        })
+    }
+
+    pub fn get_document_info(&self, handle: EditorHandle) -> DocumentInfo {
+        DocumentInfo {
+            is_active: SYMBOL_TABLES.lock().unwrap().get(&handle).is_some(),
+        }
+    }
+
+    fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
+        let (message_queue, receiver) = channel();
+        thread::spawn(move || loop {
+            let mut current = 0;
+            let mut text = String::new();
+            loop {
+                match receiver.try_recv() {
+                    Ok((handle, t)) => {
+                        log::debug!("Got signal from client {}", handle);
+                        current = handle;
+                        text = t;
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => return,
+                }
+            }
+            if current != 0 {
+                LanguageServer::scan_client(current, status_change, text);
+            }
+            thread::sleep(Duration::from_millis(300));
+        });
+
+        message_queue
     }
 
     fn update_watchers(
@@ -172,7 +214,7 @@ impl LanguageServer {
         }
     }
 
-    pub fn scan_client(handle: EditorHandle, status_change: StatusChangeCallback, text: String) {
+    fn scan_client(handle: EditorHandle, status_change: StatusChangeCallback, text: String) {
         log::debug!("Spawn scan for client {}", handle);
         let sources = SOURCE_MAP.lock().unwrap();
         let dict = RESERVED_WORDS.lock().unwrap();
@@ -211,47 +253,5 @@ impl LanguageServer {
         }
 
         log::debug!("Finalize scan for client: {}", handle);
-    }
-
-    pub fn disconnect(&mut self, handle: EditorHandle) {
-        log::debug!("Client {} disconnected", handle);
-        SYMBOL_TABLES.lock().unwrap().remove(&handle);
-        SOURCE_MAP.lock().unwrap().remove(&handle);
-        IMPLICIT_INCLUDES.lock().unwrap().remove(&handle);
-        let mut watcher = FILE_WATCHER.lock().unwrap();
-
-        // disconnect editor from all files and stop watching orphan references
-        let _drained = WATCHED_FILES
-            .lock()
-            .unwrap()
-            .drain_filter(|k, v| {
-                v.remove(&handle);
-                if v.len() == 0 {
-                    watcher.unwatch(k);
-                    return true;
-                }
-                return false;
-            })
-            .collect::<Vec<_>>();
-    }
-
-    pub fn find(&mut self, symbol: &str, handle: EditorHandle) -> Option<SymbolInfo> {
-        let st = SYMBOL_TABLES.lock().unwrap();
-        let table = st.get(&handle)?;
-        let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
-        Some(SymbolInfo {
-            line_number: if map.file_name.is_some() {
-                0
-            } else {
-                map.line_number
-            },
-            _type: map._type,
-        })
-    }
-
-    pub fn get_document_info(&self, handle: EditorHandle) -> DocumentInfo {
-        DocumentInfo {
-            is_active: SYMBOL_TABLES.lock().unwrap().get(&handle).is_some(),
-        }
     }
 }
