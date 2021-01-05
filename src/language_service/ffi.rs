@@ -33,9 +33,10 @@ pub struct SymbolInfoMap {
 #[allow(dead_code)]
 pub enum Status {
     Disabled = 0,
-    Ready = 1,
+    Idle = 1,
     Scanning = 2,
-    PendingUpdate = 3,
+    PendingScan = 3,
+    PendingRescan = 4,
     Unknown = 254,
     Error = 255,
 }
@@ -47,15 +48,11 @@ pub enum Source {
 }
 
 pub type EditorHandle = u32;
-pub type NotifyCallback = extern "C" fn(EditorHandle);
 pub type StatusChangeCallback = extern "C" fn(EditorHandle, Status);
 
 #[no_mangle]
-pub extern "C" fn language_service_new(
-    cb1: NotifyCallback,
-    cb2: StatusChangeCallback,
-) -> *mut LanguageServer {
-    ptr_new(LanguageServer::new(cb1, cb2))
+pub extern "C" fn language_service_new(cb: StatusChangeCallback) -> *mut LanguageServer {
+    ptr_new(LanguageServer::new(cb))
 }
 
 #[no_mangle]
@@ -127,14 +124,11 @@ pub unsafe extern "C" fn language_service_find(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn language_service_info(
+pub unsafe extern "C" fn language_service_is_enabled(
     server: *mut LanguageServer,
     handle: EditorHandle,
-    out_value: *mut DocumentInfo,
 ) -> bool {
     boolclosure! {{
-        let info = out_value.as_mut()?;
-        info.is_active = server.as_mut()?.get_document_info(handle).is_active;
-        Some(())
+        server.as_mut()?.get_document_info(handle).is_active.then_some(())
     }}
 }
