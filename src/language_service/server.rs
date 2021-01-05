@@ -86,18 +86,6 @@ impl LanguageServer {
         status_change(handle, Status::PendingScan);
     }
 
-    fn rescan(file_name: &String, status_change: StatusChangeCallback) {
-        log::debug!("File {} has changed", file_name);
-        let files = WATCHED_FILES.lock().unwrap();
-
-        if let Some(handles) = files.get(file_name.as_str()) {
-            log::debug!("Found {} dependent clients", handles.len());
-            for &handle in handles {
-                status_change(handle, Status::PendingScan)
-            }
-        }
-    }
-
     pub fn disconnect(&mut self, handle: EditorHandle) {
         log::debug!("Client {} disconnected", handle);
         SYMBOL_TABLES.lock().unwrap().remove(&handle);
@@ -210,6 +198,18 @@ impl LanguageServer {
                         }
                     });
                 }
+            }
+        }
+    }
+
+    fn rescan(file_name: &String, status_change: StatusChangeCallback) {
+        log::debug!("File {} has changed", file_name);
+        let files = WATCHED_FILES.lock().unwrap();
+
+        if let Some(handles) = files.get(file_name.as_str()) {
+            log::debug!("Found {} dependent clients", handles.len());
+            for &handle in handles {
+                status_change(handle, Status::PendingScan)
             }
         }
     }
