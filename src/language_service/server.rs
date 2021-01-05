@@ -1,8 +1,5 @@
 use super::{
-    ffi::{
-        DocumentInfo, EditorHandle, NotifyCallback, Source, Status, StatusChangeCallback,
-        SymbolInfo,
-    },
+    ffi::{DocumentInfo, EditorHandle, Source, Status, StatusChangeCallback, SymbolInfo},
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
@@ -44,13 +41,12 @@ lazy_static! {
 }
 
 pub struct LanguageServer {
-    pub notify: NotifyCallback,
     pub status_change: StatusChangeCallback,
     pub message_queue: Sender<(EditorHandle, String)>,
 }
 
 impl LanguageServer {
-    pub fn new(notify: NotifyCallback, status_change: StatusChangeCallback) -> Self {
+    pub fn new(status_change: StatusChangeCallback) -> Self {
         RESERVED_WORDS
             .lock()
             .unwrap()
@@ -67,19 +63,15 @@ impl LanguageServer {
         }
         log::debug!("Language service created");
 
-        let message_queue = LanguageServer::setup_message_queue(notify, status_change);
+        let message_queue = LanguageServer::setup_message_queue(status_change);
 
         Self {
-            notify,
             status_change,
             message_queue,
         }
     }
 
-    fn setup_message_queue(
-        notify: NotifyCallback,
-        status_change: StatusChangeCallback,
-    ) -> Sender<(EditorHandle, String)> {
+    fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
         let (message_queue, receiver) = channel();
         thread::spawn(move || loop {
             let mut current = 0;
@@ -96,7 +88,7 @@ impl LanguageServer {
                 }
             }
             if current != 0 {
-                LanguageServer::scan_client(current, notify, status_change, text);
+                LanguageServer::scan_client(current, status_change, text);
             }
             thread::sleep(Duration::from_millis(300));
         });
@@ -116,17 +108,17 @@ impl LanguageServer {
             .insert(handle, vec![static_constants_file.clone()]);
 
         let status_change = self.status_change;
-        status_change(handle, Status::PendingUpdate);
+        status_change(handle, Status::PendingScan);
     }
 
-    fn rescan(file_name: &String, _notify: NotifyCallback, status_change: StatusChangeCallback) {
+    fn rescan(file_name: &String, status_change: StatusChangeCallback) {
         log::debug!("File {} has changed", file_name);
         let files = WATCHED_FILES.lock().unwrap();
 
         if let Some(handles) = files.get(file_name.as_str()) {
             log::debug!("Found {} dependent clients", handles.len());
             for &handle in handles {
-                status_change(handle, Status::PendingUpdate)
+                status_change(handle, Status::PendingScan)
             }
         }
     }
@@ -134,7 +126,6 @@ impl LanguageServer {
     fn update_watchers(
         tree: &Vec<String>,
         handle: EditorHandle,
-        notify: NotifyCallback,
         status_change: StatusChangeCallback,
     ) {
         log::debug!("Updating file watchers");
@@ -170,7 +161,7 @@ impl LanguageServer {
                     let file_name1 = file_name.clone();
                     watcher.watch(file_name.as_str(), move |event| match event {
                         hotwatch::Event::Write(_) => {
-                            LanguageServer::rescan(&file_name1, notify, status_change)
+                            LanguageServer::rescan(&file_name1, status_change)
                         }
                         _ => {
                             // todo: check out other events, e.g. file delete or move
@@ -181,14 +172,8 @@ impl LanguageServer {
         }
     }
 
-    pub fn scan_client(
-        handle: EditorHandle,
-        notify: NotifyCallback,
-        status_change: StatusChangeCallback,
-        text: String,
-    ) {
+    pub fn scan_client(handle: EditorHandle, status_change: StatusChangeCallback, text: String) {
         log::debug!("Spawn scan for client {}", handle);
-        status_change(handle, Status::Scanning);
         let sources = SOURCE_MAP.lock().unwrap();
         let dict = RESERVED_WORDS.lock().unwrap();
         let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
@@ -205,7 +190,7 @@ impl LanguageServer {
             if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
                 log::debug!("Document tree is ready: {} child entries", tree.len());
 
-                LanguageServer::update_watchers(&tree, handle, notify, status_change);
+                LanguageServer::update_watchers(&tree, handle, status_change);
                 for file in tree {
                     log::debug!("Fetch symbols from file {}", file);
                     if let Some(constants) = scanner::find_constants_from_file(&file, &dict) {
@@ -222,8 +207,7 @@ impl LanguageServer {
             }
 
             symbol_table.insert(handle, table);
-            notify(handle);
-            status_change(handle, Status::Ready);
+            status_change(handle, Status::Idle);
         }
 
         log::debug!("Finalize scan for client: {}", handle);
