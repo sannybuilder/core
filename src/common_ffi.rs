@@ -4,7 +4,11 @@ use std::ffi::{CStr, CString};
 pub type PChar = *const c_char;
 
 pub fn pchar_to_string<'a>(s: PChar) -> Option<String> {
-    Some(String::from(pchar_to_str(s)?))
+    if s.is_null() {
+        None
+    } else {
+        unsafe { Some(String::from(CStr::from_ptr(s).to_string_lossy())) }
+    }
 }
 
 pub fn pchar_to_str<'a>(s: PChar) -> Option<&'a str> {
