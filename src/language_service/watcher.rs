@@ -16,7 +16,6 @@ impl FileWatcher {
         F: 'static + FnMut(Event) + Send,
     {
         if let Some(watcher) = &mut self.watcher {
-            log::debug!("Start watching file {}", file_name);
             match watcher.watch(file_name, handler) {
                 Ok(_) => log::debug!("Start watching file {}", file_name),
                 Err(_) => log::debug!("Can't start watching file {}", file_name),
