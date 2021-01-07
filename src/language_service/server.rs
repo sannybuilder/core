@@ -128,6 +128,27 @@ impl LanguageServer {
         }
     }
 
+    pub fn filter_constants_by_name(
+        &self,
+        needle: &str,
+        handle: EditorHandle,
+    ) -> Option<Vec<(String, String)>> {
+        let st = SYMBOL_TABLES.lock().unwrap();
+        let table = st.get(&handle)?;
+        let needle = needle.to_ascii_lowercase();
+        Some(
+            table
+                .symbols
+                .iter()
+                .filter_map(|(name, map)| {
+                    name.to_ascii_lowercase()
+                        .starts_with(&needle)
+                        .then_some((name.clone(), map.value.clone()?.clone()))
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
     fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
         let (message_queue, receiver) = channel();
         thread::spawn(move || loop {
