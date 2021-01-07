@@ -1,10 +1,12 @@
+use std::ffi::CString;
+
 use crate::{
     common_ffi::{pchar_to_str, pchar_to_string, ptr_free, ptr_new, PChar},
     language_service::server::LanguageServer,
 };
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SymbolType {
     Number = 0,
     String = 1,
@@ -13,7 +15,7 @@ pub enum SymbolType {
     ModelName = 4,
 }
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SymbolInfo {
     pub line_number: u32,
     pub _type: SymbolType,
@@ -27,6 +29,7 @@ pub struct SymbolInfoMap {
     pub file_name: Option<String>,
     pub line_number: u32,
     pub _type: SymbolType,
+    pub value: Option<String>,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -130,5 +133,21 @@ pub unsafe extern "C" fn language_service_is_enabled(
 ) -> bool {
     boolclosure! {{
         server.as_mut()?.get_document_info(handle).is_active.then_some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn language_service_filter_constants_by_name(
+    server: *mut LanguageServer,
+    handle: EditorHandle,
+    needle: PChar,
+    dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
+) -> bool {
+    boolclosure! {{
+        let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle)?;
+        for item in items {
+            dict.as_mut()?.add(CString::new(item.0).ok()?, CString::new(item.1).ok()?)
+        }
+        Some(())
     }}
 }

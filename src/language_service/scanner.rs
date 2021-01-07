@@ -151,6 +151,7 @@ pub fn find_constants<'a>(
                                 line_number: line_number as u32,
                                 _type: SymbolType::Var,
                                 file_name: file_name.clone(),
+                                value: None,
                             },
                         ))
                     }
@@ -170,6 +171,7 @@ pub fn find_constants<'a>(
                                     line_number: line_number as u32,
                                     _type,
                                     file_name: file_name.clone(),
+                                    value: Some(String::from(value)),
                                 },
                             ))
                         }
