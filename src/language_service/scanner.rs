@@ -1,5 +1,6 @@
 use super::ffi::{Source, SymbolInfoMap, SymbolType};
 use crate::dictionary::dictionary_num_by_str::DictNumByStr;
+use crate::language_service::server::{CACHE_FILE_SYMBOLS, CACHE_FILE_TREE};
 use std::fs;
 use std::path::Path;
 
@@ -16,16 +17,11 @@ const TOKEN_BOOL: i32 = 6;
 
 fn document_tree_walk<'a>(
     content: &String,
-    file_name: String,
+    file_name: &String,
     reserved_words: &DictNumByStr,
     mut refs: &mut Vec<String>,
-) -> Option<Vec<String>> {
-    if refs.contains(&file_name) {
-        return None;
-    } else {
-        refs.push(file_name.clone());
-    }
-    let mut files = content
+) -> Vec<String> {
+    content
         .lines()
         .filter_map(|x| {
             // todo: use nom parser
@@ -40,23 +36,53 @@ fn document_tree_walk<'a>(
                         include_path.pop();
                     }
 
-                    let path = resolve_path(include_path, &file_name)?;
-                    let content = fs::read_to_string(&path).ok()?;
-                    return Some(document_tree_walk(
-                        &content,
-                        path,
-                        reserved_words,
-                        &mut refs,
-                    )?);
+                    let path = resolve_path(include_path, file_name)?;
+
+                    // ignore cyclic paths
+                    if refs.contains(&path) {
+                        return None;
+                    } else {
+                        refs.push(path.clone());
+                    }
+
+                    let mut tree = match get_cached_tree(&path) {
+                        Some(tree) => {
+                            log::debug!("Using cached tree for file {}", path);
+                            tree
+                        }
+                        None => {
+                            log::debug!("Tree cache not found. Reading file {}", path);
+                            file_walk(path.clone(), reserved_words, &mut refs)?
+                        }
+                    };
+                    tree.push(path);
+                    return Some(tree);
                 }
             }
             None
         })
         .flatten()
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+}
 
-    files.push(file_name);
-    Some(files)
+fn file_walk(
+    file_name: String,
+    reserved_words: &DictNumByStr,
+    mut refs: &mut Vec<String>,
+) -> Option<Vec<String>> {
+    let content = fs::read_to_string(&file_name).ok()?;
+    let tree = document_tree_walk(&content, &file_name, reserved_words, &mut refs);
+
+    log::debug!("Caching file tree {}", file_name);
+    let mut cache = CACHE_FILE_TREE.lock().unwrap();
+    cache.insert(file_name.clone(), tree.clone());
+
+    Some(tree)
+}
+
+fn get_cached_tree(file_name: &String) -> Option<Vec<String>> {
+    let cache = CACHE_FILE_TREE.lock().unwrap();
+    cache.get(file_name).cloned()
 }
 
 fn resolve_path(p: String, parent_file: &String) -> Option<String> {
@@ -69,7 +95,7 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
     let dir_name = Path::new(&parent_file).parent()?;
     let abs_name = dir_name.join(path);
 
-    return Some(String::from(abs_name.to_str()?));
+    Some(String::from(abs_name.to_str()?))
 }
 
 pub fn document_tree<'a>(
@@ -81,10 +107,7 @@ pub fn document_tree<'a>(
     match source {
         Source::File(file_name) => {
             let mut refs: Vec<String> = vec![];
-            let mut tree =
-                document_tree_walk(text, file_name.to_string(), reserved_words, &mut refs)?;
-
-            tree.pop(); // remove the source document from the tree as we scan it in memory
+            let mut tree = document_tree_walk(text, file_name, reserved_words, &mut refs);
 
             tree.extend(implicit_includes.iter().filter_map(|include_path| {
                 Some(resolve_path(
@@ -103,8 +126,21 @@ pub fn find_constants_from_file(
     file_name: &String,
     reserved_words: &DictNumByStr,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
-    let content = fs::read_to_string(file_name).ok()?;
-    find_constants(&content, reserved_words, &Source::File(file_name.clone()))
+    let mut cache = CACHE_FILE_SYMBOLS.lock().unwrap();
+    match cache.get(file_name) {
+        Some(symbols) => {
+            log::debug!("Using cached symbols for file {}", file_name);
+            Some(symbols.clone())
+        }
+        None => {
+            log::debug!("Symbol cache not found. Reading file {}", file_name);
+            let content = fs::read_to_string(file_name).ok()?;
+            let symbols =
+                find_constants(&content, reserved_words, &Source::File(file_name.clone()))?;
+            cache.insert(file_name.clone(), symbols.clone());
+            Some(symbols)
+        }
+    }
 }
 
 pub fn find_constants_from_memory(
