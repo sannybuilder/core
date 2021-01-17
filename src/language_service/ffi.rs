@@ -25,6 +25,7 @@ pub struct DocumentInfo {
     pub is_active: bool,
 }
 
+#[derive(Clone)]
 pub struct SymbolInfoMap {
     pub file_name: Option<String>,
     pub line_number: u32,
