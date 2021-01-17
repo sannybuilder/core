@@ -220,6 +220,7 @@ impl LanguageServer {
                     let file_name1 = file_name.clone();
                     watcher.watch(file_name.as_str(), move |event| match event {
                         hotwatch::Event::Write(_) => {
+                            // todo: check if possible to use file name from event payload
                             LanguageServer::invalidate_file_cache(&file_name1);
                             LanguageServer::rescan(&file_name1, status_change)
                         }
@@ -238,18 +239,15 @@ impl LanguageServer {
         // invalidate cache for all files referencing this file
         // todo: change file cache to only store its own references and not children
         // then use cache.remove(file_name)
-        let drained = cache
+        let _drained = cache
             .drain_filter(|k, v| {
                 if k == file_name || v.contains(file_name) {
+                    log::debug!("Invalidating tree cache for file {}", k);
                     return true;
                 }
                 return false;
             })
             .collect::<Vec<_>>();
-
-        for (d, _) in drained {
-            log::debug!("Invalidated tree cache for file {}", d);
-        }
 
         CACHE_FILE_SYMBOLS
             .lock()
