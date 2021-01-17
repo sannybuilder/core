@@ -1,5 +1,7 @@
 use super::{
-    ffi::{DocumentInfo, EditorHandle, Source, Status, StatusChangeCallback, SymbolInfo},
+    ffi::{
+        DocumentInfo, EditorHandle, Source, Status, StatusChangeCallback, SymbolInfo, SymbolInfoMap,
+    },
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
@@ -37,6 +39,10 @@ lazy_static! {
     ));
     static ref FILE_WATCHER: Mutex<FileWatcher> = Mutex::new(FileWatcher::new());
     static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
+        Mutex::new(HashMap::new());
+    pub static ref CACHE_FILE_TREE: Mutex<HashMap<String, Vec<String>>> =
+        Mutex::new(HashMap::new());
+    pub static ref CACHE_FILE_SYMBOLS: Mutex<HashMap<String, Vec<(String, SymbolInfoMap)>>> =
         Mutex::new(HashMap::new());
 }
 
@@ -99,7 +105,8 @@ impl LanguageServer {
             .unwrap()
             .drain_filter(|k, v| {
                 v.remove(&handle);
-                if v.len() == 0 {
+                if v.is_empty() {
+                    LanguageServer::invalidate_file_cache(k);
                     watcher.unwatch(k);
                     return true;
                 }
@@ -189,7 +196,8 @@ impl LanguageServer {
             .drain_filter(|k, v| {
                 if !tree.contains(k) && v.contains(&handle) {
                     v.remove(&handle);
-                    if v.len() == 0 {
+                    if v.is_empty() {
+                        LanguageServer::invalidate_file_cache(k);
                         watcher.unwatch(k);
                         return true;
                     }
@@ -212,6 +220,7 @@ impl LanguageServer {
                     let file_name1 = file_name.clone();
                     watcher.watch(file_name.as_str(), move |event| match event {
                         hotwatch::Event::Write(_) => {
+                            LanguageServer::invalidate_file_cache(&file_name1);
                             LanguageServer::rescan(&file_name1, status_change)
                         }
                         _ => {
@@ -221,6 +230,35 @@ impl LanguageServer {
                 }
             }
         }
+    }
+
+    fn invalidate_file_cache(file_name: &String) {
+        let mut cache = CACHE_FILE_TREE.lock().unwrap();
+
+        // invalidate cache for all files referencing this file
+        // todo: change file cache to only store its own references and not children
+        // then use cache.remove(file_name)
+        let drained = cache
+            .drain_filter(|k, v| {
+                if k == file_name || v.contains(file_name) {
+                    return true;
+                }
+                return false;
+            })
+            .collect::<Vec<_>>();
+
+        for (d, _) in drained {
+            log::debug!("Invalidated tree cache for file {}", d);
+        }
+
+        CACHE_FILE_SYMBOLS
+            .lock()
+            .unwrap()
+            .remove(file_name)
+            .and_then(|_| {
+                log::debug!("Invalidating symbol cache for file {}", file_name);
+                Some(())
+            });
     }
 
     fn rescan(file_name: &String, status_change: StatusChangeCallback) {
@@ -249,7 +287,6 @@ impl LanguageServer {
             let v = vec![];
             let includes = implicit_includes.get(&handle).unwrap_or(&v);
 
-            // todo: cache includes and not re-read them if they did not change
             if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
                 log::debug!("Document tree is ready: {} child entries", tree.len());
 
