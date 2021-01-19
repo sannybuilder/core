@@ -159,20 +159,17 @@ impl LanguageServer {
     fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
         let (message_queue, receiver) = channel();
         thread::spawn(move || loop {
-            let mut current = 0;
-            let mut text = String::new();
-            loop {
+            let message = loop {
                 match receiver.try_recv() {
-                    Ok((handle, t)) => {
-                        log::debug!("Got signal from client {}", handle);
-                        current = handle;
-                        text = t;
+                    Ok((handle, text)) => {
+                        log::debug!("Got message from client {}", handle);
+                        break Some((handle, text));
                     }
-                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Empty) => break None,
                     Err(TryRecvError::Disconnected) => return,
                 }
-            }
-            if current != 0 {
+            };
+            if let Some((current, text)) = message {
                 LanguageServer::scan_client(current, status_change, text);
             }
             thread::sleep(Duration::from_millis(300));
