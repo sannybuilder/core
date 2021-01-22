@@ -2,6 +2,8 @@ use crate::common_ffi::*;
 use crate::dictionary::ffi::*;
 use std::ffi::CString;
 
+use super::config::ConfigBuilder;
+
 pub type DictStrByNum = Dict<i32, CString>;
 
 #[no_mangle]
@@ -11,16 +13,23 @@ pub extern "C" fn dictionary_str_by_num_new(
     case_format: u8,
     comments: PChar,
     delimiters: PChar,
-    trim: bool,
+    strip_whitespace: bool,
 ) -> *mut DictStrByNum {
-    ptr_new(Dict::new(
-        duplicates.into(),
-        case_format.into(),
-        pchar_to_string(comments).unwrap_or(String::new()),
-        pchar_to_string(delimiters).unwrap_or(String::new()),
-        trim,
-        hex_keys,
-    ))
+    let mut builder = ConfigBuilder::new();
+
+    builder
+        .set_duplicates(duplicates.into())
+        .set_case_format(case_format.into())
+        .set_strip_whitespace(strip_whitespace)
+        .set_hex_keys(hex_keys);
+
+    if let Some(comments) = pchar_to_string(comments) {
+        builder.set_comments(comments);
+    }
+    if let Some(delimiters) = pchar_to_string(delimiters) {
+        builder.set_delimiters(delimiters);
+    }
+    ptr_new(Dict::new(builder.build()))
 }
 
 #[no_mangle]
@@ -41,7 +50,7 @@ pub unsafe extern "C" fn dictionary_str_by_num_add(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let value = apply_format(pchar_to_str(value)?, &d.case_format)?;
+        let value = apply_format(pchar_to_str(value)?, &d.config.case_format)?;
         d.add(key, value);
         Some(())
     }}

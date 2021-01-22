@@ -5,10 +5,7 @@ use super::{
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
-use crate::dictionary::{
-    dictionary_num_by_str::DictNumByStr,
-    ffi::{CaseFormat, Duplicates},
-};
+use crate::dictionary::{config, dictionary_num_by_str::DictNumByStr};
 use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
@@ -29,14 +26,8 @@ lazy_static! {
     static ref WATCHED_FILES: Mutex<HashMap<String, HashSet<EditorHandle>>> =
         Mutex::new(HashMap::new());
     static ref SOURCE_MAP: Mutex<HashMap<EditorHandle, Source>> = Mutex::new(HashMap::new());
-    static ref RESERVED_WORDS: Mutex<DictNumByStr> = Mutex::new(DictNumByStr::new(
-        Duplicates::Replace,
-        CaseFormat::LowerCase,
-        String::from(";"),
-        String::from("=,"),
-        true,
-        false,
-    ));
+    static ref RESERVED_WORDS: Mutex<DictNumByStr> =
+        Mutex::new(DictNumByStr::new(config::Config::default()));
     static ref FILE_WATCHER: Mutex<FileWatcher> = Mutex::new(FileWatcher::new());
     static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
         Mutex::new(HashMap::new());
