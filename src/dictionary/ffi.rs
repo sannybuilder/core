@@ -3,14 +3,11 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use super::config::Config;
+
 pub struct Dict<T, U> {
     pub map: HashMap<T, U>,
-    pub duplicates: Duplicates,
-    pub case_format: CaseFormat,
-    pub comments: String,
-    pub delimiters: String,
-    pub strip_whitespace: bool,
-    pub hex_keys: bool,
+    pub config: Config,
 }
 
 impl<T, U> Dict<T, U>
@@ -18,27 +15,15 @@ where
     T: std::cmp::Eq + std::hash::Hash,
     (T, U): KeyValue,
 {
-    pub fn new(
-        duplicates: Duplicates,
-        case_format: CaseFormat,
-        comments: String,
-        delimiters: String,
-        strip_whitespace: bool,
-        hex_keys: bool,
-    ) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             map: HashMap::new(),
-            duplicates,
-            case_format,
-            comments,
-            delimiters,
-            strip_whitespace,
-            hex_keys,
+            config,
         }
     }
 
     pub fn should_add(&self, key: &T) -> bool {
-        match self.duplicates {
+        match self.config.duplicates {
             Duplicates::Replace => true,
             Duplicates::Ignore => match self.map.get(key) {
                 Some(_) => false,
@@ -53,13 +38,13 @@ where
     }
 
     pub fn parse_file<'a>(&mut self, content: String) -> Option<()> {
-        let comments = self.comments.clone();
-        let strip = self.strip_whitespace;
+        let comments = self.config.comments.clone();
+        let strip_whitespace = self.config.strip_whitespace;
         let lines = content
             .lines()
             .map(|line| {
                 let mut line = String::from(line);
-                if strip {
+                if strip_whitespace {
                     line.retain(|c| !c.is_whitespace());
                 }
                 line
@@ -68,7 +53,7 @@ where
 
         for line in lines {
             let v: Vec<&str> = line
-                .split_terminator(|c| self.delimiters.contains(c))
+                .split_terminator(|c| self.config.delimiters.contains(c))
                 .map(|v| v.trim())
                 .collect();
 
@@ -82,7 +67,8 @@ where
     }
 
     pub fn add_raw(&mut self, key: &str, value: &str) -> Option<()> {
-        let (key, value) = <(T, U)>::get_key_value(key, value, self.hex_keys, &self.case_format)?;
+        let (key, value) =
+            <(T, U)>::get_key_value(key, value, self.config.hex_keys, &self.config.case_format)?;
         self.add(key, value);
         Some(())
     }
@@ -157,7 +143,7 @@ fn parse_number(s: &str, hex: bool) -> Option<i32> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Duplicates {
     Replace, // 0
     Ignore,  // 1
@@ -180,7 +166,7 @@ impl From<Duplicates> for u8 {
         }
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CaseFormat {
     NoFormat,  // 0
     UpperCase, // 1
