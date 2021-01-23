@@ -57,7 +57,7 @@ where
                 .map(|v| v.trim())
                 .collect();
 
-            if v.len() != 2 {
+            if v.len() < 2 {
                 continue;
             }
 
