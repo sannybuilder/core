@@ -99,13 +99,20 @@ pub unsafe extern "C" fn dictionary_str_by_num_filter_by_name(
     boolclosure! {{
         let needle = pchar_to_str(needle)?.to_ascii_lowercase();
         let d = ns.as_mut()?;
+        let out = dict.as_mut()?;
+
+        if needle.is_empty() {
+            for (key, value) in d.map.iter() {
+                out.add(*key, value.clone());
+            }
+            return Some(());
+        }
 
         for (key, value) in d.map.iter() {
             let name = value.to_str().ok()?.to_ascii_lowercase();
             if name.starts_with(&needle) {
-                dict.as_mut()?.add(*key, value.clone());
+                out.add(*key, value.clone());
             }
-
         }
         Some(())
     }}
