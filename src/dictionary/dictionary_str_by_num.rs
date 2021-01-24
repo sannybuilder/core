@@ -29,6 +29,8 @@ pub extern "C" fn dictionary_str_by_num_new(
     if let Some(delimiters) = pchar_to_string(delimiters) {
         builder.set_delimiters(delimiters);
     }
+
+    log::debug!("New instance with config {:?}", builder);
     ptr_new(Dict::new(builder.build()))
 }
 
@@ -38,7 +40,12 @@ pub unsafe extern "C" fn dictionary_str_by_num_load_file(
     file_name: PChar,
 ) -> bool {
     boolclosure! {{
-        dict.as_mut()?.load_file(pchar_to_str(file_name)?)
+        let file_name = pchar_to_str(file_name)?;
+        log::debug!("Loading file {}", file_name);
+        let d = dict.as_mut()?;
+        d.load_file(file_name);
+        log::debug!("Loaded {} entries", d.map.len());
+        Some(())
     }}
 }
 
@@ -79,6 +86,27 @@ pub unsafe extern "C" fn dictionary_str_by_num_get_entry(
         let (key, value) = dict.as_mut()?.map.iter().nth(index)?;
         *out_key = *key;
         *out_value = value.as_ptr();
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dictionary_str_by_num_filter_by_name(
+    ns: *mut DictStrByNum,
+    needle: PChar,
+    dict: *mut crate::dictionary::dictionary_str_by_num::DictStrByNum,
+) -> bool {
+    boolclosure! {{
+        let needle = pchar_to_str(needle)?.to_ascii_lowercase();
+        let d = ns.as_mut()?;
+
+        for (key, value) in d.map.iter() {
+            let name = value.to_str().ok()?.to_ascii_lowercase();
+            if name.starts_with(&needle) {
+                dict.as_mut()?.add(*key, value.clone());
+            }
+
+        }
         Some(())
     }}
 }

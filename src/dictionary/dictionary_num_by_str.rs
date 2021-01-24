@@ -27,6 +27,8 @@ pub extern "C" fn dictionary_num_by_str_new(
     if let Some(delimiters) = pchar_to_string(delimiters) {
         builder.set_delimiters(delimiters);
     }
+
+    log::debug!("New instance with config {:?}", builder);
     ptr_new(Dict::new(builder.build()))
 }
 
@@ -36,7 +38,12 @@ pub unsafe extern "C" fn dictionary_num_by_str_load_file(
     file_name: PChar,
 ) -> bool {
     boolclosure! {{
-        dict.as_mut()?.load_file(pchar_to_str(file_name)?)
+        let file_name = pchar_to_str(file_name)?;
+        let d = dict.as_mut()?;
+        log::debug!("Loading file {}", file_name);
+        d.load_file(file_name);
+        log::debug!("Loaded {} entries", d.map.len());
+        Some(())
     }}
 }
 
