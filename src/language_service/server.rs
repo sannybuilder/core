@@ -9,6 +9,9 @@ use crate::dictionary::{config, dictionary_num_by_str::DictNumByStr, ffi::CaseFo
 use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
+    env,
+    fs::File,
+    path::PathBuf,
     sync::{
         mpsc::{channel, Sender, TryRecvError},
         Mutex,
@@ -18,7 +21,6 @@ use std::{
 };
 
 use simplelog::*;
-use std::fs::File;
 
 lazy_static! {
     static ref SYMBOL_TABLES: Mutex<HashMap<EditorHandle, SymbolTable>> =
@@ -26,8 +28,11 @@ lazy_static! {
     static ref WATCHED_FILES: Mutex<HashMap<String, HashSet<EditorHandle>>> =
         Mutex::new(HashMap::new());
     static ref SOURCE_MAP: Mutex<HashMap<EditorHandle, Source>> = Mutex::new(HashMap::new());
-    static ref RESERVED_WORDS: Mutex<DictNumByStr> =
-        Mutex::new(DictNumByStr::new(config::ConfigBuilder::new().set_case_format(CaseFormat::LowerCase).build()));
+    static ref RESERVED_WORDS: Mutex<DictNumByStr> = Mutex::new(DictNumByStr::new(
+        config::ConfigBuilder::new()
+            .set_case_format(CaseFormat::LowerCase)
+            .build()
+    ));
     static ref FILE_WATCHER: Mutex<FileWatcher> = Mutex::new(FileWatcher::new());
     static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
         Mutex::new(HashMap::new());
@@ -44,10 +49,13 @@ pub struct LanguageServer {
 
 impl LanguageServer {
     pub fn new(status_change: StatusChangeCallback) -> Self {
-        RESERVED_WORDS
-            .lock()
-            .unwrap()
-            .load_file("data\\compiler.ini");
+        let compiler_ini_path = LanguageServer::cwd()
+            .unwrap_or(PathBuf::from(""))
+            .join("data\\compiler.ini");
+
+        if let Some(path) = compiler_ini_path.to_str() {
+            RESERVED_WORDS.lock().unwrap().load_file(path);
+        }
 
         if cfg!(debug_assertions) {
             let config = ConfigBuilder::new().set_time_to_local(true).build();
@@ -297,5 +305,9 @@ impl LanguageServer {
         }
 
         log::debug!("Finalize scan for client: {}", handle);
+    }
+
+    fn cwd() -> Option<PathBuf> {
+        Some(env::current_exe().ok()?.parent()?.to_path_buf())
     }
 }
