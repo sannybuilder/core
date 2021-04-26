@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "sanny_builder_core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "hotwatch",
  "lazy_static",

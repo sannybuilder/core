@@ -9,7 +9,6 @@ end
 use nom::branch::alt;
 use nom::bytes::complete::is_not;
 use nom::bytes::complete::tag;
-use nom::bytes::complete::take_until;
 use nom::character::complete::alpha1;
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
@@ -18,11 +17,11 @@ use nom::character::complete::line_ending;
 use nom::character::complete::multispace0;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
-use nom::combinator::all_consuming;
 use nom::combinator::map;
 use nom::combinator::opt;
 use nom::combinator::recognize;
 use nom::combinator::value;
+use nom::combinator::verify;
 use nom::multi::many0;
 use nom::multi::many1;
 use nom::sequence::delimited;
@@ -91,8 +90,7 @@ fn optional_line_ending(input: &str) -> IResult<&str, &str> {
 }
 
 fn enum_items(input: &str) -> IResult<&str, EnumItems> {
-    let (input, s) = take_until("end")(input)?;
-    let (_, raw_items) = all_consuming(many1(enum_item))(s)?;
+    let (input, raw_items) = many1(enum_item)(input)?;
 
     #[derive(PartialEq)]
     enum TT {
@@ -177,7 +175,7 @@ fn enum_name(input: &str) -> IResult<&str, &str> {
 fn enum_item(input: &str) -> IResult<&str, EnumItemRaw> {
     map(
         terminated(
-            pair(identifier, enum_value),
+            pair(verify(identifier, |s: &str| s != "end"), enum_value),
             delimited(
                 space0,
                 alt((value((), line_ending), value((), char(',')))),
@@ -224,7 +222,7 @@ fn test_enum0() {
         parse_enums(
             r"
     enum X
-    a=1
+    ending=1
     b=2
     end"
         ),
@@ -232,7 +230,7 @@ fn test_enum0() {
             "",
             vec![Enum {
                 name: "X",
-                items: EnumItems::Int(vec![("a", 1), ("b", 2)])
+                items: EnumItems::Int(vec![("ending", 1), ("b", 2)])
             }]
         ))
     )
