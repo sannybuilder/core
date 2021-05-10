@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use crate::dictionary::{config::ConfigBuilder, dictionary_str_by_num::DictStrByNum};
+
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
  * defined in the compiler.ini took first 20 slots and classes started their numeration from 20
@@ -14,6 +16,7 @@ pub struct Namespaces {
     props: Vec<String>,
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
+    short_descriptions: DictStrByNum,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -32,6 +35,7 @@ pub struct Opcode {
     pub name: CString,
     pub operation: CString, // used in decompiler output
     pub hint: CString,
+    pub short_desc: CString,
     pub params_len: i32,
     pub params: Vec<OpcodeParam>,
 }
@@ -106,11 +110,14 @@ impl<'a> From<PropKey<'a>> for String {
 
 impl Namespaces {
     pub fn new() -> Self {
+        let mut builder = ConfigBuilder::new();
+        builder.set_hex_keys(true).set_strip_whitespace(false);
         Self {
             names: vec![],
             props: vec![],
             opcodes: vec![],
             enums: vec![],
+            short_descriptions: DictStrByNum::new(builder.build()),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
@@ -118,6 +125,7 @@ impl Namespaces {
     }
 
     pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        self.short_descriptions.load_file("data\\gta3\\hints.txt");
         let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_classes(content)
     }
@@ -262,6 +270,12 @@ impl Namespaces {
         let id = u16::from_str_radix(id, 16).ok()?;
         let full_name = String::from(format!("{}.{}", class_name, name));
         let params = self.parse_params(&hint_params, &full_name);
+        let short_desc = self
+            .short_descriptions
+            .map
+            .get(&id.into())
+            .unwrap_or(&CString::new("").ok()?)
+            .clone();
 
         let op_index = self.register_opcode(Opcode {
             hint: self.params_to_string(&params)?,
@@ -272,6 +286,7 @@ impl Namespaces {
             op_type: r#type.into(), // regular=0 or conditional=1
             help_code: i32::from_str_radix(help_code, 10).ok()?,
 
+            short_desc,
             prop_type: OpcodeType::Method,
             operation: CString::new("").ok()?,
             prop_pos: 0,
@@ -309,6 +324,12 @@ impl Namespaces {
             let op_type = OpcodeType::from(_type);
             let params_len = params.len();
             let help_code = i32::from_str_radix(help_code, 10).ok()?;
+            let short_desc = self
+                .short_descriptions
+                .map
+                .get(&id.into())
+                .unwrap_or(&CString::new("").ok()?)
+                .clone();
 
             let prop_params = if op_type == OpcodeType::Property {
                 if prop_pos == 2 {
@@ -335,6 +356,7 @@ impl Namespaces {
                 name: CString::new(full_name.clone()).ok()?,
                 prop_type: OpcodeType::Property,
                 operation: CString::new(operation).ok()?,
+                short_desc: short_desc.clone(),
             });
             let key = PropKey {
                 name,
@@ -358,6 +380,7 @@ impl Namespaces {
                     prop_type: OpcodeType::Method,
                     prop_pos: 0,
                     operation: CString::new("").ok()?,
+                    short_desc,
                 });
 
                 map.insert(name.to_ascii_lowercase(), op_index);
