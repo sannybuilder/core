@@ -225,7 +225,13 @@ pub fn find_constants<'a>(
 
 pub fn get_type(value: &str) -> Option<SymbolType> {
     if value.len() > 1 {
-        if value.starts_with('$') || value.ends_with('@') {
+        if value.starts_with('$')
+            || value.starts_with("v$")
+            || value.starts_with("s$")
+            || value.ends_with('@')
+            || value.ends_with("@s")
+            || value.ends_with("@v")
+        {
             return Some(SymbolType::Var);
         }
         if value.starts_with('"') || value.starts_with('\'') {
