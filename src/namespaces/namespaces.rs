@@ -125,9 +125,12 @@ impl Namespaces {
     }
 
     pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Option<()> {
-        self.short_descriptions.load_file("data\\gta3\\hints.txt");
         let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_classes(content)
+    }
+
+    pub fn load_hints<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        self.short_descriptions.load_file(file_name)
     }
 
     // todo: refactor to use with anonymous enums

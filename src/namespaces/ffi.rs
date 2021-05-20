@@ -21,6 +21,13 @@ pub unsafe extern "C" fn classes_load_enum_file(ns: *mut Namespaces, file_name: 
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_load_hints(ns: *mut Namespaces, file_name: PChar) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.load_hints(pchar_to_str(file_name)?)
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_opcode(
     ns: *mut Namespaces,
     opcode: u16,
