@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs;
 
-use crate::dictionary::{config::ConfigBuilder, dictionary_str_by_num::DictStrByNum};
+use crate::dictionary::config::ConfigBuilder;
+
+use super::library::Command;
+use super::library::Library;
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -16,7 +20,8 @@ pub struct Namespaces {
     props: Vec<String>,
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
-    short_descriptions: DictStrByNum,
+    library: Vec<Command>,
+
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -117,7 +122,7 @@ impl Namespaces {
             props: vec![],
             opcodes: vec![],
             enums: vec![],
-            short_descriptions: DictStrByNum::new(builder.build()),
+            library: vec![],
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
@@ -127,10 +132,6 @@ impl Namespaces {
     pub fn load_classes<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_classes(content)
-    }
-
-    pub fn load_hints<'a>(&mut self, file_name: &'a str) -> Option<()> {
-        self.short_descriptions.load_file(file_name)
     }
 
     // todo: refactor to use with anonymous enums
@@ -273,11 +274,10 @@ impl Namespaces {
         let id = u16::from_str_radix(id, 16).ok()?;
         let full_name = String::from(format!("{}.{}", class_name, name));
         let params = self.parse_params(&hint_params, &full_name);
+
         let short_desc = self
-            .short_descriptions
-            .map
-            .get(&id.into())
-            .unwrap_or(&CString::new("").ok()?)
+            .find_short_description(id)
+            .unwrap_or(&String::new())
             .clone();
 
         let op_index = self.register_opcode(Opcode {
@@ -289,7 +289,7 @@ impl Namespaces {
             op_type: r#type.into(), // regular=0 or conditional=1
             help_code: i32::from_str_radix(help_code, 10).ok()?,
 
-            short_desc,
+            short_desc: CString::new(short_desc).ok()?,
             prop_type: OpcodeType::Method,
             operation: CString::new("").ok()?,
             prop_pos: 0,
@@ -328,10 +328,8 @@ impl Namespaces {
             let params_len = params.len();
             let help_code = i32::from_str_radix(help_code, 10).ok()?;
             let short_desc = self
-                .short_descriptions
-                .map
-                .get(&id.into())
-                .unwrap_or(&CString::new("").ok()?)
+                .find_short_description(id)
+                .unwrap_or(&String::new())
                 .clone();
 
             let prop_params = if op_type == OpcodeType::Property {
@@ -359,7 +357,7 @@ impl Namespaces {
                 name: CString::new(full_name.clone()).ok()?,
                 prop_type: OpcodeType::Property,
                 operation: CString::new(operation).ok()?,
-                short_desc: short_desc.clone(),
+                short_desc: CString::new(short_desc.clone()).ok()?,
             });
             let key = PropKey {
                 name,
@@ -383,7 +381,7 @@ impl Namespaces {
                     prop_type: OpcodeType::Method,
                     prop_pos: 0,
                     operation: CString::new("").ok()?,
-                    short_desc,
+                    short_desc: CString::new(short_desc).ok()?,
                 });
 
                 map.insert(name.to_ascii_lowercase(), op_index);
@@ -678,5 +676,27 @@ impl Namespaces {
 
     pub fn has_prop(&self, prop_name: &str) -> bool {
         self.props.contains(&prop_name.to_ascii_lowercase())
+    }
+
+    pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        let content = fs::read_to_string(file_name).ok()?;
+        self.library = serde_json::from_str::<Library>(content.as_str())
+            .ok()?
+            .extensions
+            .into_iter()
+            .flat_map(|ext| ext.commands.into_iter())
+            .collect::<Vec<_>>();
+        Some(())
+    }
+
+    fn find_short_description<'a>(&self, id: u16) -> Option<&String> {
+        self.library.iter().find_map(|c| {
+            let cid = u16::from_str_radix(c.id.as_str(), 16).ok()?;
+            if cid == id {
+                Some(c.short_desc.as_ref())
+            } else {
+                None
+            }
+        })?
     }
 }
