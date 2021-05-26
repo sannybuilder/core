@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 
-use crate::dictionary::config::ConfigBuilder;
-
-use super::library::Command;
 use super::library::Library;
+use crate::dictionary::{config::ConfigBuilder, dictionary_str_by_num::DictStrByNum};
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -20,8 +18,7 @@ pub struct Namespaces {
     props: Vec<String>,
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
-    library: Vec<Command>,
-
+    short_descriptions: DictStrByNum,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -122,7 +119,7 @@ impl Namespaces {
             props: vec![],
             opcodes: vec![],
             enums: vec![],
-            library: vec![],
+            short_descriptions: DictStrByNum::new(builder.build()),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
@@ -276,8 +273,8 @@ impl Namespaces {
         let params = self.parse_params(&hint_params, &full_name);
 
         let short_desc = self
-            .find_short_description(id)
-            .unwrap_or(&String::new())
+            .get_short_description(id)
+            .unwrap_or(&CString::new("").ok()?)
             .clone();
 
         let op_index = self.register_opcode(Opcode {
@@ -328,8 +325,8 @@ impl Namespaces {
             let params_len = params.len();
             let help_code = i32::from_str_radix(help_code, 10).ok()?;
             let short_desc = self
-                .find_short_description(id)
-                .unwrap_or(&String::new())
+                .get_short_description(id)
+                .unwrap_or(&CString::new("").ok()?)
                 .clone();
 
             let prop_params = if op_type == OpcodeType::Property {
@@ -680,23 +677,23 @@ impl Namespaces {
 
     pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = fs::read_to_string(file_name).ok()?;
-        self.library = serde_json::from_str::<Library>(content.as_str())
+
+        for command in serde_json::from_str::<Library>(content.as_str())
             .ok()?
             .extensions
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
-            .collect::<Vec<_>>();
+        {
+            let key = i32::from_str_radix(command.id.as_str(), 16).ok()?;
+            self.short_descriptions.add(
+                key,
+                CString::new(command.short_desc.unwrap_or(String::new())).ok()?,
+            )
+        }
         Some(())
     }
 
-    fn find_short_description<'a>(&self, id: u16) -> Option<&String> {
-        self.library.iter().find_map(|c| {
-            let cid = u16::from_str_radix(c.id.as_str(), 16).ok()?;
-            if cid == id {
-                Some(c.short_desc.as_ref())
-            } else {
-                None
-            }
-        })?
+    pub fn get_short_description<'a>(&self, id: u16) -> Option<&CString> {
+        self.short_descriptions.map.get(&id.into())
     }
 }
