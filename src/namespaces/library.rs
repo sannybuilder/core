@@ -44,6 +44,8 @@ pub struct Extension {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Meta {
     pub last_update: u64,
+    pub url: String,
+    pub version: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
