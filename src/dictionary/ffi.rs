@@ -61,12 +61,12 @@ where
                 continue;
             }
 
-            self.add_raw(v[0], v[1]);
+            self.add_with_format(v[0], v[1]);
         }
         Some(())
     }
 
-    pub fn add_raw(&mut self, key: &str, value: &str) -> Option<()> {
+    pub fn add_with_format(&mut self, key: &str, value: &str) -> Option<()> {
         let (key, value) =
             <(T, U)>::get_key_value(key, value, self.config.hex_keys, &self.config.case_format)?;
         self.add(key, value);
@@ -77,6 +77,13 @@ where
         if self.should_add(&key) {
             self.map.insert(key, value);
         }
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<()> {
+        let (key, _) =
+            <(T, U)>::get_key_value(key, "", self.config.hex_keys, &self.config.case_format)?;
+        self.map.remove(&key);
+        Some(())
     }
 }
 

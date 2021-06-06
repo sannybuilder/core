@@ -21,6 +21,25 @@ pub unsafe extern "C" fn classes_load_enum_file(ns: *mut Namespaces, file_name: 
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_load_library(ns: *mut Namespaces, file_name: PChar) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.load_library(pchar_to_str(file_name)?)
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_short_description_by_id(
+    ns: *mut Namespaces,
+    opcode: u16,
+    out: *mut PChar,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_short_description(opcode)?.as_ptr();
+        Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_opcode(
     ns: *mut Namespaces,
     opcode: u16,
