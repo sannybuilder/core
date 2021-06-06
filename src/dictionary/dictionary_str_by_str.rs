@@ -48,7 +48,14 @@ pub unsafe extern "C" fn dictionary_str_by_str_add(
     value: PChar,
 ) -> bool {
     boolclosure! {{
-       dict.as_mut()?.add_raw(pchar_to_str(key)?, pchar_to_str(value)?);
+       dict.as_mut()?.add_with_format(pchar_to_str(key)?, pchar_to_str(value)?);
+       Some(())
+    }}
+}
+#[no_mangle]
+pub unsafe extern "C" fn dictionary_str_by_str_remove(dict: *mut DictStrByStr, key: PChar) -> bool {
+    boolclosure! {{
+       dict.as_mut()?.remove(pchar_to_str(key)?);
        Some(())
     }}
 }
@@ -61,7 +68,7 @@ pub unsafe extern "C" fn dictionary_str_by_str_find(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format(pchar_to_str(key)?, &d.config.case_format)?;
+        let key = apply_format(pchar_to_str(key)?, &CaseFormat::LowerCase)?; // should match KeyValue for (CString, CString)
         *out = d.map.get(&key)?.as_ptr();
         Some(())
     }}
