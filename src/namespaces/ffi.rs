@@ -226,6 +226,14 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
     ptr_free(ns);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_library_version(ns: *mut Namespaces, out: *mut PChar) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_library_version().as_ptr();
+        Some(())
+    }}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

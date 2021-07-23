@@ -24,6 +24,7 @@ pub struct Namespaces {
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
     pub map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
+    library_version: CString,
 }
 
 #[repr(C)]
@@ -120,6 +121,7 @@ impl Namespaces {
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
+            library_version: CString::new("").unwrap(),
         }
     }
 
@@ -675,8 +677,11 @@ impl Namespaces {
     pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = fs::read_to_string(file_name).ok()?;
 
-        for command in serde_json::from_str::<Library>(content.as_str())
-            .ok()?
+        let lib = serde_json::from_str::<Library>(content.as_str()).ok()?;
+
+        self.library_version = CString::new(lib.meta.version).ok()?;
+
+        for command in lib
             .extensions
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
@@ -692,5 +697,9 @@ impl Namespaces {
 
     pub fn get_short_description<'a>(&self, id: u16) -> Option<&CString> {
         self.short_descriptions.get(&id.into())
+    }
+
+    pub fn get_library_version(&self) -> &CString {
+        &self.library_version
     }
 }
