@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs;
+
+use super::library::Library;
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -14,12 +17,14 @@ pub struct Namespaces {
     props: Vec<String>,
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
+    short_descriptions: HashMap</*opcode*/ u16, /*short_desc*/ CString>,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
     pub map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
+    library_version: CString,
 }
 
 #[repr(C)]
@@ -32,6 +37,7 @@ pub struct Opcode {
     pub name: CString,
     pub operation: CString, // used in decompiler output
     pub hint: CString,
+    pub short_desc: CString,
     pub params_len: i32,
     pub params: Vec<OpcodeParam>,
 }
@@ -111,9 +117,11 @@ impl Namespaces {
             props: vec![],
             opcodes: vec![],
             enums: vec![],
+            short_descriptions: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
+            library_version: CString::new("").unwrap(),
         }
     }
 
@@ -263,6 +271,11 @@ impl Namespaces {
         let full_name = String::from(format!("{}.{}", class_name, name));
         let params = self.parse_params(&hint_params, &full_name);
 
+        let short_desc = self
+            .get_short_description(id)
+            .unwrap_or(&CString::new("").ok()?)
+            .clone();
+
         let op_index = self.register_opcode(Opcode {
             hint: self.params_to_string(&params)?,
             params_len: params.len() as i32,
@@ -272,6 +285,7 @@ impl Namespaces {
             op_type: r#type.into(), // regular=0 or conditional=1
             help_code: i32::from_str_radix(help_code, 10).ok()?,
 
+            short_desc,
             prop_type: OpcodeType::Method,
             operation: CString::new("").ok()?,
             prop_pos: 0,
@@ -309,6 +323,10 @@ impl Namespaces {
             let op_type = OpcodeType::from(_type);
             let params_len = params.len();
             let help_code = i32::from_str_radix(help_code, 10).ok()?;
+            let short_desc = self
+                .get_short_description(id)
+                .unwrap_or(&CString::new("").ok()?)
+                .clone();
 
             let prop_params = if op_type == OpcodeType::Property {
                 if prop_pos == 2 {
@@ -335,6 +353,7 @@ impl Namespaces {
                 name: CString::new(full_name.clone()).ok()?,
                 prop_type: OpcodeType::Property,
                 operation: CString::new(operation).ok()?,
+                short_desc: short_desc.clone(),
             });
             let key = PropKey {
                 name,
@@ -358,6 +377,7 @@ impl Namespaces {
                     prop_type: OpcodeType::Method,
                     prop_pos: 0,
                     operation: CString::new("").ok()?,
+                    short_desc,
                 });
 
                 map.insert(name.to_ascii_lowercase(), op_index);
@@ -652,5 +672,34 @@ impl Namespaces {
 
     pub fn has_prop(&self, prop_name: &str) -> bool {
         self.props.contains(&prop_name.to_ascii_lowercase())
+    }
+
+    pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
+        let content = fs::read_to_string(file_name).ok()?;
+
+        let lib = serde_json::from_str::<Library>(content.as_str()).ok()?;
+
+        self.library_version = CString::new(lib.meta.version).ok()?;
+
+        for command in lib
+            .extensions
+            .into_iter()
+            .flat_map(|ext| ext.commands.into_iter())
+        {
+            let key = u16::from_str_radix(command.id.as_str(), 16).ok()?;
+            self.short_descriptions.insert(
+                key,
+                CString::new(command.short_desc.unwrap_or(String::new())).ok()?,
+            );
+        }
+        Some(())
+    }
+
+    pub fn get_short_description<'a>(&self, id: u16) -> Option<&CString> {
+        self.short_descriptions.get(&id.into())
+    }
+
+    pub fn get_library_version(&self) -> &CString {
+        &self.library_version
     }
 }
