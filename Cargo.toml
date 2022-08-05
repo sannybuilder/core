@@ -1,8 +1,8 @@
 [package]
 name = "sanny_builder_core"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Seemann <mail@sannybuilder.com>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,8 +16,11 @@ nom = "6.0.1"
 nom_locate = "3.0.0"
 hotwatch = "0.4.5"
 lazy_static = "1.4.0"
-log = { version = "0.4.11", features = ["release_max_level_off"] }
+log = { version = "0.4.14", features = ["max_level_debug", "release_max_level_off"] }
 simplelog = "0.9.0"
 lexical-core = "0.7.6"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
+ureq = {version = "2.5.0", features = ["json"] }
+base64 = "0.13.0"
+version-compare = "0.1.0"
