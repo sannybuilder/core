@@ -28,7 +28,7 @@ impl UpdateService {
 
     pub fn auto_update(&self, params: &str) -> Option<()> {
         let mut v = Vec::new();
-        let mut x = params.split_ascii_whitespace().map(|x| x.to_string());
+        let mut x = params.split_terminator('|').map(|x| x.to_string());
         while let Some(game) = x.next() {
             if let Some(version) = x.next() {
                 v.push((game, version, x.next()));
@@ -45,7 +45,7 @@ impl UpdateService {
     }
 
     pub fn download(&self, params: &str) -> Option<()> {
-        let mut x = params.split_ascii_whitespace().map(|x| x.to_string());
+        let mut x = params.split_terminator('|').map(|x| x.to_string());
         if let Some(game) = x.next() {
             let status_change = self.status_change;
             let destination = x.next();
