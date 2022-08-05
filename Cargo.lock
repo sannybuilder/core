@@ -542,6 +542,7 @@ dependencies = [
  "simplelog",
  "ureq",
  "version-compare",
+ "winapi 0.3.9",
 ]
 
 [[package]]
