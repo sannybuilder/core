@@ -10,7 +10,6 @@ use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     env,
-    fs::File,
     path::PathBuf,
     sync::{
         mpsc::{channel, Sender, TryRecvError},
@@ -19,8 +18,6 @@ use std::{
     thread,
     time::Duration,
 };
-
-use simplelog::*;
 
 lazy_static! {
     static ref SYMBOL_TABLES: Mutex<HashMap<EditorHandle, SymbolTable>> =
@@ -57,15 +54,6 @@ impl LanguageServer {
             RESERVED_WORDS.lock().unwrap().load_file(path);
         }
 
-        if cfg!(debug_assertions) {
-            let config = ConfigBuilder::new().set_time_to_local(true).build();
-
-            let _ = WriteLogger::init(
-                LevelFilter::max(),
-                config,
-                File::create("core.log").unwrap(),
-            );
-        }
         log::debug!("Language service created");
 
         let message_queue = LanguageServer::setup_message_queue(status_change);
