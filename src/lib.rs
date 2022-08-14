@@ -12,6 +12,7 @@ pub mod language_service;
 pub mod math;
 pub mod namespaces;
 pub mod parser;
+pub mod sdk;
 pub mod update_service;
 pub mod utils;
 

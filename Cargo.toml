@@ -1,6 +1,6 @@
 [package]
 name = "sanny_builder_core"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Seemann <mail@sannybuilder.com>"]
 edition = "2021"
 
@@ -24,6 +24,6 @@ serde = { version = "1.0", features = ["derive"] }
 ureq = {version = "2.5.0", features = ["json"] }
 base64 = "0.13.0"
 version-compare = "0.1.0"
-winapi = { version = "0.3", features = ["winver"] }
+winapi = { version = "0.3", features = ["winver", "winuser"] }
 ctor = "0.1.20"
 libloading = "0.7.0"
