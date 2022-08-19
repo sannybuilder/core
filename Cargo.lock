@@ -564,6 +564,7 @@ dependencies = [
  "simplelog",
  "ureq",
  "version-compare",
+ "version_info",
  "winapi 0.3.9",
 ]
 
@@ -759,6 +760,15 @@ name = "version_check"
 version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5a972e5669d67ba988ce3dc826706fb0a8b01471c088cb0b6110b805cc36aed"
+
+[[package]]
+name = "version_info"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39ed93d524200ae0ecf5776f9793581facefae744b4bcc728d1094ad2b884573"
+dependencies = [
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "walkdir"
