@@ -3,3 +3,5 @@ mod enum_parser;
 mod ffi;
 mod library;
 pub mod namespaces;
+
+pub use library::Library;

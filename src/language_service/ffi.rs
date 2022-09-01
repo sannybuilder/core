@@ -52,11 +52,10 @@ pub enum Source {
 }
 
 pub type EditorHandle = u32;
-pub type StatusChangeCallback = extern "C" fn(EditorHandle, Status);
 
 #[no_mangle]
-pub extern "C" fn language_service_new(cb: StatusChangeCallback) -> *mut LanguageServer {
-    ptr_new(LanguageServer::new(cb))
+pub extern "C" fn language_service_new() -> *mut LanguageServer {
+    ptr_new(LanguageServer::new())
 }
 
 #[no_mangle]

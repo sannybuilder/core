@@ -40,6 +40,30 @@ pub unsafe extern "C" fn classes_get_short_description_by_id(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_get_is_condition_by_id(
+    ns: *mut Namespaces,
+    opcode: u16,
+    out: *mut bool,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.is_condition(opcode)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_is_branch_by_id(
+    ns: *mut Namespaces,
+    opcode: u16,
+    out: *mut bool,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.is_branch(opcode)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_opcode(
     ns: *mut Namespaces,
     opcode: u16,

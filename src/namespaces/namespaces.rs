@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 
-use super::library::Library;
+use super::library::{Attr, Library};
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -18,6 +18,7 @@ pub struct Namespaces {
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
     short_descriptions: HashMap</*opcode*/ u16, /*short_desc*/ CString>,
+    attrs: HashMap</*opcode */ u16, Attr>,
     map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -118,6 +119,7 @@ impl Namespaces {
             opcodes: vec![],
             enums: vec![],
             short_descriptions: HashMap::new(),
+            attrs: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_enum: HashMap::new(),
@@ -686,17 +688,23 @@ impl Namespaces {
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
         {
-            let key = u16::from_str_radix(command.id.as_str(), 16).ok()?;
-            self.short_descriptions.insert(
-                key,
-                CString::new(command.short_desc.unwrap_or(String::new())).ok()?,
-            );
+            self.short_descriptions
+                .insert(command.id, CString::new(command.short_desc).ok()?);
+            self.attrs.insert(command.id, command.attrs);
         }
         Some(())
     }
 
     pub fn get_short_description<'a>(&self, id: u16) -> Option<&CString> {
-        self.short_descriptions.get(&id.into())
+        self.short_descriptions.get(&id)
+    }
+
+    pub fn is_condition<'a>(&self, id: u16) -> Option<bool> {
+        self.attrs.get(&id).map(|attrs| attrs.is_condition)
+    }
+
+    pub fn is_branch<'a>(&self, id: u16) -> Option<bool> {
+        self.attrs.get(&id).map(|attrs| attrs.is_branch)
     }
 
     pub fn get_library_version(&self) -> &CString {

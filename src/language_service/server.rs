@@ -1,7 +1,5 @@
 use super::{
-    ffi::{
-        DocumentInfo, EditorHandle, Source, Status, StatusChangeCallback, SymbolInfo, SymbolInfoMap,
-    },
+    ffi::{DocumentInfo, EditorHandle, Source, Status, SymbolInfo, SymbolInfoMap},
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
@@ -10,7 +8,6 @@ use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     env,
-    fs::File,
     path::PathBuf,
     sync::{
         mpsc::{channel, Sender, TryRecvError},
@@ -19,8 +16,6 @@ use std::{
     thread,
     time::Duration,
 };
-
-use simplelog::*;
 
 lazy_static! {
     static ref SYMBOL_TABLES: Mutex<HashMap<EditorHandle, SymbolTable>> =
@@ -43,12 +38,11 @@ lazy_static! {
 }
 
 pub struct LanguageServer {
-    pub status_change: StatusChangeCallback,
     pub message_queue: Sender<(EditorHandle, String)>,
 }
 
 impl LanguageServer {
-    pub fn new(status_change: StatusChangeCallback) -> Self {
+    pub fn new() -> Self {
         let compiler_ini_path = LanguageServer::cwd()
             .unwrap_or(PathBuf::from(""))
             .join("data\\compiler.ini");
@@ -57,23 +51,10 @@ impl LanguageServer {
             RESERVED_WORDS.lock().unwrap().load_file(path);
         }
 
-        if cfg!(debug_assertions) {
-            let config = ConfigBuilder::new().set_time_to_local(true).build();
-
-            let _ = WriteLogger::init(
-                LevelFilter::max(),
-                config,
-                File::create("core.log").unwrap(),
-            );
-        }
         log::debug!("Language service created");
 
-        let message_queue = LanguageServer::setup_message_queue(status_change);
-
-        Self {
-            status_change,
-            message_queue,
-        }
+        let message_queue = LanguageServer::setup_message_queue();
+        Self { message_queue }
     }
 
     pub fn connect(&mut self, source: Source, handle: EditorHandle, static_constants_file: &str) {
@@ -87,7 +68,6 @@ impl LanguageServer {
             .unwrap()
             .insert(handle, vec![static_constants_file.clone()]);
 
-        let status_change = self.status_change;
         status_change(handle, Status::PendingScan);
     }
 
@@ -155,7 +135,7 @@ impl LanguageServer {
         )
     }
 
-    fn setup_message_queue(status_change: StatusChangeCallback) -> Sender<(EditorHandle, String)> {
+    fn setup_message_queue() -> Sender<(EditorHandle, String)> {
         let (message_queue, receiver) = channel();
         thread::spawn(move || loop {
             let message = loop {
@@ -169,7 +149,7 @@ impl LanguageServer {
                 }
             };
             if let Some((current, text)) = message {
-                LanguageServer::scan_client(current, status_change, text);
+                LanguageServer::scan_client(current, text);
             }
             thread::sleep(Duration::from_millis(300));
         });
@@ -177,11 +157,7 @@ impl LanguageServer {
         message_queue
     }
 
-    fn update_watchers(
-        tree: &Vec<String>,
-        handle: EditorHandle,
-        status_change: StatusChangeCallback,
-    ) {
+    fn update_watchers(tree: &Vec<String>, handle: EditorHandle) {
         log::debug!("Updating file watchers");
 
         let mut watched_files = WATCHED_FILES.lock().unwrap();
@@ -218,7 +194,7 @@ impl LanguageServer {
                         hotwatch::Event::Write(_) => {
                             // todo: check if possible to use file name from event payload
                             LanguageServer::invalidate_file_cache(&file_name1);
-                            LanguageServer::rescan(&file_name1, status_change)
+                            LanguageServer::rescan(&file_name1)
                         }
                         _ => {
                             // todo: check out other events, e.g. file delete or move
@@ -255,7 +231,7 @@ impl LanguageServer {
             });
     }
 
-    fn rescan(file_name: &String, status_change: StatusChangeCallback) {
+    fn rescan(file_name: &String) {
         log::debug!("File {} has changed", file_name);
         let files = WATCHED_FILES.lock().unwrap();
 
@@ -267,7 +243,7 @@ impl LanguageServer {
         }
     }
 
-    fn scan_client(handle: EditorHandle, status_change: StatusChangeCallback, text: String) {
+    fn scan_client(handle: EditorHandle, text: String) {
         log::debug!("Spawn scan for client {}", handle);
         let sources = SOURCE_MAP.lock().unwrap();
         let dict = RESERVED_WORDS.lock().unwrap();
@@ -284,7 +260,7 @@ impl LanguageServer {
             if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
                 log::debug!("Document tree is ready: {} child entries", tree.len());
 
-                LanguageServer::update_watchers(&tree, handle, status_change);
+                LanguageServer::update_watchers(&tree, handle);
                 for file in tree {
                     log::debug!("Fetch symbols from file {}", file);
                     if let Some(constants) = scanner::find_constants_from_file(&file, &dict) {
@@ -310,4 +286,9 @@ impl LanguageServer {
     fn cwd() -> Option<PathBuf> {
         Some(env::current_exe().ok()?.parent()?.to_path_buf())
     }
+}
+
+fn status_change(handle: u32, status: Status) {
+    use crate::sdk::messages::{send_message, WM_ONSTATUSCHANGE};
+    send_message(WM_ONSTATUSCHANGE, handle as _, status as _)
 }
