@@ -29,7 +29,7 @@ pub unsafe fn ptr_free<T>(ptr: *mut T) {
     if ptr.is_null() {
         return;
     }
-    Box::from_raw(ptr);
+    let _ = Box::from_raw(ptr);
 }
 
 pub fn ptr_new<T>(o: T) -> *mut T {

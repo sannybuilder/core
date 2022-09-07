@@ -83,7 +83,6 @@ pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: *mut DictNumByStr) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CString;
 
     #[test]
     fn test_dictionary_num_by_str_find() {
