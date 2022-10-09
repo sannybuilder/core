@@ -2,6 +2,11 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::fs;
 
+use crate::dictionary::{
+    dictionary_num_by_str::DictNumByStr, dictionary_str_by_num::DictStrByNum,
+    list_num_by_str::ListNumByStr,
+};
+
 use super::library::{Attr, Library};
 
 /**
@@ -11,26 +16,28 @@ use super::library::{Attr, Library};
  * this should not be needed once all types moved here
  */
 static CID: usize = 20;
+pub type OpId = u16;
 
 pub struct Namespaces {
     names: Vec<CString>, // case-preserved
     props: Vec<String>,
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
-    short_descriptions: HashMap</*opcode*/ u16, /*short_desc*/ CString>,
-    attrs: HashMap</*opcode */ u16, Attr>,
-    map_op_by_id: HashMap</*opcode*/ u16, /*opcodes index*/ usize>,
+    short_descriptions: HashMap<OpId, /*short_desc*/ CString>,
+    attrs: HashMap<OpId, Attr>,
+    map_op_by_id: HashMap<OpId, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
+    map_op_by_command_name: HashMap</*command_name*/ String, OpId>,
     pub map_enum: HashMap</*enum_name*/ String, HashMap</*member_name*/ String, EnumMember>>,
     library_version: CString,
 }
 
 #[repr(C)]
 pub struct Opcode {
-    pub id: u16,
+    pub id: OpId,
     pub help_code: i32,
     pub op_type: OpcodeType,
     pub prop_type: OpcodeType,
@@ -122,6 +129,7 @@ impl Namespaces {
             attrs: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
+            map_op_by_command_name: HashMap::new(),
             map_enum: HashMap::new(),
             library_version: CString::new("").unwrap(),
         }
@@ -687,27 +695,62 @@ impl Namespaces {
             .extensions
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
+            .filter(|c| !c.attrs.is_unsupported)
         {
             self.short_descriptions
                 .insert(command.id, CString::new(command.short_desc).ok()?);
             self.attrs.insert(command.id, command.attrs);
+            self.map_op_by_command_name
+                .insert(command.name.to_ascii_lowercase(), command.id);
         }
         Some(())
     }
 
-    pub fn get_short_description<'a>(&self, id: u16) -> Option<&CString> {
+    pub fn get_short_description<'a>(&self, id: OpId) -> Option<&CString> {
         self.short_descriptions.get(&id)
     }
 
-    pub fn is_condition<'a>(&self, id: u16) -> Option<bool> {
+    pub fn get_opcode_by_command_name<'a>(&self, command_name: &str) -> Option<&OpId> {
+        self.map_op_by_command_name
+            .get(&command_name.to_ascii_lowercase())
+    }
+
+    pub fn is_condition<'a>(&self, id: OpId) -> Option<bool> {
         self.attrs.get(&id).map(|attrs| attrs.is_condition)
     }
 
-    pub fn is_branch<'a>(&self, id: u16) -> Option<bool> {
+    pub fn is_branch<'a>(&self, id: OpId) -> Option<bool> {
         self.attrs.get(&id).map(|attrs| attrs.is_branch)
     }
 
     pub fn get_library_version(&self) -> &CString {
         &self.library_version
+    }
+
+    pub fn populate_keywords<'a>(&mut self, dict: &mut DictNumByStr) -> Option<()> {
+        use crate::dictionary::ffi::apply_format_s;
+        for (name, op) in self.map_op_by_command_name.iter() {
+            let key = apply_format_s(name, &dict.config.case_format);
+            dict.add(key, *op as _);
+        }
+        Some(())
+    }
+
+    pub fn populate_keywords2<'a>(&mut self, dict: &mut DictStrByNum) -> Option<()> {
+        use crate::dictionary::ffi::apply_format;
+        for (name, op) in self.map_op_by_command_name.iter() {
+            let value = apply_format(name, &dict.config.case_format)?;
+            dict.add(*op as _, value);
+        }
+        Some(())
+    }
+
+    pub fn populate_keywords3<'a>(&mut self, dict: &mut ListNumByStr) -> Option<()> {
+        use crate::dictionary::ffi::apply_format;
+        for (name, op) in self.map_op_by_command_name.iter() {
+            let key = apply_format(name, &dict.config.case_format)?;
+            dict.add(key, *op as _);
+        }
+        Some(())
     }
 }

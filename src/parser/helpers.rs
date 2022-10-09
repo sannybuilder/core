@@ -14,7 +14,7 @@ use nom::{bytes::complete::tag, character::complete::multispace0};
 
 use crate::parser::interface::*;
 
-// whitespace wrapper
+/** whitespace wrapper */
 pub fn ws<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
     inner: F,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
@@ -28,7 +28,7 @@ where
     )
 }
 
-// standalone line
+/** standalone line */ 
 pub fn line<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
     inner: F,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
@@ -42,6 +42,7 @@ where
     )
 }
 
+/** inline comment */
 pub fn inline_comment<'a, E: nom::error::ParseError<Span<'a>>>(
     s: Span<'a>,
 ) -> IResult<Span<'a>, (), E> {

@@ -110,7 +110,7 @@ pub struct CommandParam {
 #[derive(Deserialize, Debug)]
 pub struct Command {
     #[serde(default, deserialize_with = "convert_to_number")]
-    pub id: u16,
+    pub id: super::namespaces::OpId,
     pub name: String,
     pub num_params: i32,
     #[serde(default)]

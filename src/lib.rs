@@ -8,7 +8,7 @@ use simplelog::*;
 pub mod common_ffi;
 pub mod dictionary;
 pub mod language_service;
-pub mod math;
+pub mod v4;
 pub mod namespaces;
 pub mod parser;
 pub mod sdk;
