@@ -93,6 +93,55 @@ pub unsafe extern "C" fn classes_find_by_name(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_resolve_keyword(
+    ns: *mut Namespaces,
+    keyword: PChar,
+    out: *mut i32,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        *out = *ns.get_opcode_by_command_name(pchar_to_str(keyword)?)? as _;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_populate_keywords_dict(
+    ns: *mut Namespaces,
+    dict: *mut crate::dictionary::dictionary_num_by_str::DictNumByStr,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        ns.populate_keywords(dict.as_mut()?);
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_populate_keywords_dict2(
+    ns: *mut Namespaces,
+    dict: *mut crate::dictionary::dictionary_str_by_num::DictStrByNum,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        ns.populate_keywords2(dict.as_mut()?);
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_populate_keywords_dict3(
+    ns: *mut Namespaces,
+    dict: *mut crate::dictionary::list_num_by_str::ListNumByStr,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        ns.populate_keywords3(dict.as_mut()?);
+        Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_prop(
     ns: *mut Namespaces,
     class_name: PChar,
