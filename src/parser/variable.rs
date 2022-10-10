@@ -62,7 +62,7 @@ fn array_index(s: Span) -> R<Node> {
         char('['),
         alt((
             map(single_variable, |v| Node::Variable(v)),
-            map(literal::decimal, |d| Node::Token(d)),
+            map(literal::decimal, |d| Node::Literal(d)),
         )),
         char(']'),
     )(s)
@@ -484,7 +484,7 @@ mod tests {
                             syntax_kind: SyntaxKind::GlobalVariable
                         }
                     })),
-                    index: Box::new(Node::Token(Token {
+                    index: Box::new(Node::Literal(Token {
                         start: 6,
                         len: 1,
                         syntax_kind: SyntaxKind::IntegerLiteral
