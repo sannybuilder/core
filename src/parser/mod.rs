@@ -48,7 +48,7 @@ mod tests {
                         start: 4,
                         len: 1
                     },
-                    right: Box::new(Node::Token(Token {
+                    right: Box::new(Node::Literal(Token {
                         start: 12,
                         len: 3,
                         syntax_kind: SyntaxKind::IntegerLiteral
@@ -69,7 +69,7 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Token(Token {
+                body: vec![Node::Literal(Token {
                     start: 1,
                     len: 1,
                     syntax_kind: SyntaxKind::IntegerLiteral

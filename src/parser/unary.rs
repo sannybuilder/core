@@ -22,7 +22,7 @@ pub fn unary(s: Span) -> R<Node> {
         ),
         alt((
             map(variable::variable, |v| Node::Variable(v)),
-            map(literal::number, |n| Node::Token(n)),
+            map(literal::number, |n| Node::Literal(n)),
         )),
     ))(s)
 }

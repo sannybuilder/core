@@ -70,7 +70,7 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Token(Token {
+                        value: Box::new(Node::Literal(Token {
                             start: 9,
                             len: 1,
                             syntax_kind: SyntaxKind::IntegerLiteral
@@ -87,7 +87,7 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Token(Token {
+                        value: Box::new(Node::Literal(Token {
                             start: 9,
                             len: 3,
                             syntax_kind: SyntaxKind::FloatLiteral

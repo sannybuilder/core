@@ -64,9 +64,13 @@ impl Token {
 
 #[derive(Debug, PartialEq)]
 pub enum Node {
-    Token(Token),
+    /// Integer or Float literal
+    Literal(Token),
+    /// Global or local variable or array element
     Variable(Variable),
+    /// Binary expression
     Binary(BinaryExpr),
+    /// Unary expression, e.g. `~var`
     Unary(UnaryPrefixExpr),
     ConstDeclaration(ConstDeclaration),
 }
@@ -78,6 +82,26 @@ pub enum Variable {
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
     // ADMA
+}
+
+impl Variable {
+    pub fn is_global(&self) -> bool {
+        match self {
+            Variable::Global(_) => true,
+            Variable::Indexed(v) if v.var.is_global() => true,
+            Variable::ArrayElement(v) if v.array_var.is_global() => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_local(&self) -> bool {
+        match self {
+            Variable::Local(_) => true,
+            Variable::Indexed(v) if v.var.is_local() => true,
+            Variable::ArrayElement(v) if v.array_var.is_local() => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -94,6 +118,19 @@ pub struct UnaryPrefixExpr {
     pub operand: Box<Node>,
     pub token: Token,
 }
+
+impl UnaryPrefixExpr {
+    pub fn get_operator(&self) -> &SyntaxKind {
+        &self.operator.syntax_kind
+    }
+}
+
+impl BinaryExpr {
+    pub fn get_operator(&self) -> &SyntaxKind {
+        &self.operator.syntax_kind
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct ArrayElementSCR {
     pub array_var: Box<Variable>,
