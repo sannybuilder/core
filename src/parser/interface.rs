@@ -88,7 +88,7 @@ pub enum Variable {
 impl Variable {
     pub fn is_global(&self) -> bool {
         match self {
-            Variable::Global(_) => true,
+            Variable::Global(_) | Variable::Adma(_) => true,
             Variable::Indexed(v) if v.var.is_global() => true,
             Variable::ArrayElement(v) if v.array_var.is_global() => true,
             _ => false,
