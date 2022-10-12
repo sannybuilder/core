@@ -77,6 +77,10 @@ mod tests {
             transform("$var = 5"),
             Some(String::from("SET_VAR_INT $var 5"))
         );
+        assert_eq!(
+            transform("&100 = 5"),
+            Some(String::from("SET_VAR_INT &100 5"))
+        );
         assert_eq!(transform("0@ = 0"), Some(String::from("SET_LVAR_INT 0@ 0")));
         assert_eq!(
             transform("$var[10] = 5.0"),
