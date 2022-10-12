@@ -9,6 +9,7 @@ pub enum SyntaxKind {
     IndexedVariable,
     LocalVariable,
     GlobalVariable,
+    AdmaVariable,
     UnaryPrefixExpr,
     BinaryExpr,
     ConstDeclaration,
@@ -81,7 +82,7 @@ pub enum Variable {
     Local(SingleVariable),
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
-    // ADMA
+    Adma(SingleVariable)
 }
 
 impl Variable {
@@ -149,8 +150,11 @@ pub struct IndexedVariable {
 
 #[derive(Debug, PartialEq)]
 pub struct SingleVariable {
+    /// identifier portion of the variable (10, var)
     pub name: Token,
+    /// variable token including the identifier and optional type (10@s, v$var)
     pub token: Token,
+    /// variable type (i,f,s,v, or unknown)
     pub _type: VariableType,
 }
 

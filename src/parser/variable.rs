@@ -15,6 +15,7 @@ use crate::parser::literal;
 
 static LVAR_CHAR: char = '@';
 static GVAR_CHAR: char = '$';
+static ADMA_CHAR: char = '&';
 
 pub fn variable(s: Span) -> R<Variable> {
     alt((
@@ -69,7 +70,7 @@ fn array_index(s: Span) -> R<Node> {
 }
 
 fn single_variable(s: Span) -> R<Variable> {
-    alt((local_var, global_var))(s)
+    alt((local_var, global_var, adma_var))(s)
 }
 
 fn local_var(s: Span) -> R<Variable> {
@@ -99,6 +100,22 @@ fn global_var(s: Span) -> R<Variable> {
                 name,
                 _type,
                 token: Token::from(span, SyntaxKind::GlobalVariable),
+            })
+        },
+    )(s)
+}
+
+fn adma_var(s: Span) -> R<Variable> {
+    map(
+        consumed(tuple((
+            terminated(variable_type, char(ADMA_CHAR)),
+            literal::decimal,
+        ))),
+        |(span, (_type, name))| {
+            Variable::Adma(SingleVariable {
+                name,
+                _type,
+                token: Token::from(span, SyntaxKind::AdmaVariable),
             })
         },
     )(s)

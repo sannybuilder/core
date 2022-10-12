@@ -18,6 +18,10 @@ mod tests {
             Some(String::from("BIT_NOT_COMPOUND $var"))
         );
         assert_eq!(
+            transform("~&10"),
+            Some(String::from("BIT_NOT_COMPOUND &10"))
+        );
+        assert_eq!(
             transform("~10@($_,1i)"),
             Some(String::from("BIT_NOT_COMPOUND 10@($_,1i)"))
         );
@@ -64,6 +68,10 @@ mod tests {
         assert_eq!(
             transform("0@ <<= 1@"),
             Some(String::from("BIT_SHL_COMPOUND 0@ 1@"))
+        );
+        assert_eq!(
+            transform("&101 <<= &123"),
+            Some(String::from("BIT_SHL_COMPOUND &101 &123"))
         );
         assert_eq!(
             transform("$var = 5"),

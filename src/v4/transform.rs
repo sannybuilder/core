@@ -226,12 +226,12 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
                                 _ => {}
                             }
                         }
-                        _ => return None,
+                        _ => {}
                     }
                 }
             }
         }
-        _ => return None,
+        _ => {}
     }
 
     None
