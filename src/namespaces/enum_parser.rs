@@ -15,6 +15,7 @@ use nom::character::complete::char;
 use nom::character::complete::digit1;
 use nom::character::complete::line_ending;
 use nom::character::complete::multispace0;
+use nom::character::complete::one_of;
 use nom::character::complete::space0;
 use nom::character::complete::space1;
 use nom::combinator::map;
@@ -200,7 +201,7 @@ fn enum_value(input: &str) -> IResult<&str, EnumItemValueRaw> {
 }
 
 fn number(input: &str) -> IResult<&str, EnumItemValueRaw> {
-    let (input, d) = digit1(input)?;
+    let (input, d) = recognize(tuple((opt(one_of("+-")),digit1)))(input)?;
     match i32::from_str_radix(d, 10) {
         Ok(d) => Ok((input, EnumItemValueRaw::Int(d))),
         _ => Err(nom::Err::Error(nom::error::Error {
@@ -336,6 +337,26 @@ fn test_enum5() {
                     items: EnumItems::Int(vec![("a", 0), ("b", 1)])
                 }
             ]
+        ))
+    )
+}
+
+#[test]
+fn test_negative_numbers() {
+    assert_eq!(
+        parse_enums(
+            r#"
+            enum T
+	F=-1
+end
+"#
+        ),
+        Ok((
+            "",
+            vec![Enum {
+                name: "T",
+                items: EnumItems::Int(vec![("F", -1)])
+            }]
         ))
     )
 }
