@@ -85,12 +85,12 @@ pub fn float_span(s: Span) -> R<Span> {
 fn literal_1() {
     use super::*;
     use crate::parser::parse;
-    let (_, ast) = parse("1").unwrap();
+    let (_, ast) = parse(" 1 ").unwrap();
     assert_eq!(
         ast,
         AST {
             body: vec![Node::Literal(Token {
-                start: 1,
+                start: 2,
                 len: 1,
                 syntax_kind: SyntaxKind::IntegerLiteral,
             })],
@@ -102,12 +102,12 @@ fn literal_1() {
 fn literal_2() {
     use super::*;
     use crate::parser::parse;
-    let (_, ast) = parse("1.0").unwrap();
+    let (_, ast) = parse(" 1.0 ").unwrap();
     assert_eq!(
         ast,
         AST {
             body: vec![Node::Literal(Token {
-                start: 1,
+                start: 2,
                 len: 3,
                 syntax_kind: SyntaxKind::FloatLiteral,
             })],

@@ -1,15 +1,19 @@
+use nom::bytes::complete::is_not;
 use nom::bytes::complete::take_until;
 use nom::character::complete::char;
-use nom::character::complete::space0;
+use nom::character::complete::one_of;
+use nom::character::complete::space1;
 use nom::combinator::eof;
 use nom::combinator::not;
 use nom::combinator::peek;
 use nom::combinator::value;
+use nom::multi::many0;
 use nom::sequence::delimited;
+use nom::sequence::pair;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
-use nom::{branch::alt, character::streaming::multispace1};
+use nom::{branch::alt, character::complete::multispace1};
 use nom::{bytes::complete::tag, character::complete::multispace0};
 
 use crate::parser::interface::*;
@@ -22,24 +26,36 @@ where
     F: FnMut(Span<'a>) -> IResult<Span<'a>, O, E>,
 {
     delimited(
-        alt((inline_comment, value((), space0))),
+        many0(alt((inline_comment, value((), space1)))),
         inner,
-        alt((inline_comment, value((), alt((eof, space0))))),
+        many0(alt((inline_comment, eol_comment, value((), space1)))),
     )
 }
 
-/** standalone line */ 
-pub fn line<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
+/** whitespace wrapper */
+pub fn mws<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
     inner: F,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
 where
     F: FnMut(Span<'a>) -> IResult<Span<'a>, O, E>,
 {
     delimited(
-        alt((inline_comment, value((), multispace0))),
+        many0(alt((inline_comment, value((), multispace1)))),
         inner,
-        alt((inline_comment, value((), alt((eof, multispace1))))),
+        many0(alt((inline_comment, eol_comment, value((), multispace1)))),
     )
+}
+
+
+/** standalone line */
+// todo: should end with eol
+pub fn line<'a, F: 'a, O, E: nom::error::ParseError<Span<'a>>>(
+    inner: F,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
+where
+    F: FnMut(Span<'a>) -> IResult<Span<'a>, O, E>,
+{
+    mws(inner)
 }
 
 /** inline comment */
@@ -59,12 +75,9 @@ pub fn inline_comment<'a, E: nom::error::ParseError<Span<'a>>>(
     )(s)
 }
 
-pub fn char_to_type(c: Option<char>) -> VariableType {
-    match c {
-        Some('i') => VariableType::Int,
-        Some('f') => VariableType::Float,
-        Some('s') => VariableType::ShortString,
-        Some('v') => VariableType::LongString,
-        _ => VariableType::Unknown,
-    }
+/** eol comment // */
+pub fn eol_comment<'a, E: nom::error::ParseError<Span<'a>>>(
+    s: Span<'a>,
+) -> IResult<Span<'a>, (), E> {
+    value((), pair(tag("//"), is_not("\n\r")))(s)
 }

@@ -2,7 +2,7 @@ use nom::combinator::opt;
 use nom::combinator::{consumed, map};
 use nom::sequence::tuple;
 
-use crate::parser::helpers::ws;
+use crate::parser::whitespace::ws;
 use crate::parser::interface::*;
 use crate::parser::operator;
 use crate::parser::unary::unary;
@@ -76,7 +76,7 @@ mod tests {
     use crate::parser::parse;
 
     #[test]
-    fn test_binary() {
+    fn test_binary_1() {
         let (_, ast) = parse("0@ += $_t_e_s_t").unwrap();
         assert_eq!(
             ast,
@@ -121,5 +121,236 @@ mod tests {
                 })]
             }
         )
+    }
+
+    #[test]
+    fn test_binary_assignment() {
+        let (_, ast) = parse("0@ = 5").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 1,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 2,
+                            syntax_kind: SyntaxKind::LocalVariable,
+                        }
+                    }))),
+                    operator: Token {
+                        start: 4,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 6,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+
+        let (_, ast) = parse("$var = 5").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 4,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    }))),
+                    operator: Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 8,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 8,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+
+        // &123 = 5
+        let (_, ast) = parse("&123 = 5").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Adma(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 3,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 4,
+                            syntax_kind: SyntaxKind::AdmaVariable
+                        }
+                    }))),
+                    operator: Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 8,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 8,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+
+        // $2 = 1 /*comment*/
+        let (_, ast) = parse("$2 = 1 /*comment*/").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 2,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    }))),
+                    operator: Token {
+                        start: 4,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 6,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+
+        // // $2 = 1 // (int)
+        let (_, ast) = parse("$2 = 1 // (int)").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 2,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    }))),
+                    operator: Token {
+                        start: 4,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 6,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+    }
+
+    #[test]
+    fn test_string_assignment() {
+        let (_, ast) = parse("0@v = \"test\"").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 1,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        },
+                        _type: VariableType::LongString,
+                        token: Token {
+                            start: 1,
+                            len: 3,
+                            syntax_kind: SyntaxKind::LocalVariable,
+                        }
+                    }))),
+                    operator: Token {
+                        start: 5,
+                        len: 1,
+                        syntax_kind: SyntaxKind::OperatorEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 8,
+                        len: 4,
+                        syntax_kind: SyntaxKind::StringLiteral,
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 12,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
     }
 }

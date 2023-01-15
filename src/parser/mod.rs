@@ -4,11 +4,12 @@ use nom::multi::many1;
 
 pub mod interface;
 use interface::*;
+use whitespace::mws;
 
 mod binary;
 mod declaration;
 mod expression;
-mod helpers;
+mod whitespace;
 mod literal;
 mod string;
 mod operator;
@@ -17,7 +18,7 @@ mod unary;
 mod variable;
 
 pub fn parse(s: &str) -> R<AST> {
-    all_consuming(map(many1(declaration::declaration), |body| AST { body }))(Span::from(s))
+    all_consuming(map(many1(mws(declaration::declaration)), |body| AST { body }))(Span::from(s))
 }
 
 #[cfg(test)]
@@ -26,7 +27,7 @@ mod tests {
     use crate::parser::parse;
     #[test]
     fn test_with_ws0() {
-        let (_, ast) = parse("0@ =/*123*/256").unwrap();
+        let (_, ast) = parse("0@ = /*123*/ 256").unwrap();
         assert_eq!(
             ast,
             AST {
@@ -50,13 +51,13 @@ mod tests {
                         len: 1
                     },
                     right: Box::new(Node::Literal(Token {
-                        start: 12,
+                        start: 14,
                         len: 3,
                         syntax_kind: SyntaxKind::IntegerLiteral
                     })),
                     token: Token {
                         start: 1,
-                        len: 14,
+                        len: 16,
                         syntax_kind: SyntaxKind::BinaryExpr
                     }
                 })]
@@ -83,5 +84,20 @@ mod tests {
     fn test_with_ws2() {
         // does not support directives yet
         assert!(parse("1{$123}").is_err());
+    }
+
+    #[test]
+    fn test_with_ws3() {
+        let (_, ast) = parse("/**//* */ 5").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 11,
+                    len: 1,
+                    syntax_kind: SyntaxKind::IntegerLiteral
+                })]
+            }
+        );
     }
 }

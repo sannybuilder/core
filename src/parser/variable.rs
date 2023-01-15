@@ -9,7 +9,7 @@ use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 
-use crate::parser::helpers;
+use crate::parser::whitespace;
 use crate::parser::interface::*;
 use crate::parser::literal;
 
@@ -122,12 +122,23 @@ fn adma_var(s: Span) -> R<Variable> {
 }
 
 fn variable_type(s: Span) -> R<VariableType> {
-    map(opt(one_of("sv")), |c| helpers::char_to_type(c))(s)
+    map(opt(one_of("sv")), |c| char_to_type(c))(s)
 }
 
 fn array_type(s: Span) -> R<VariableType> {
-    map(opt(one_of("ifsv")), |c| helpers::char_to_type(c))(s)
+    map(opt(one_of("ifsv")), |c| char_to_type(c))(s)
 }
+
+fn char_to_type(c: Option<char>) -> VariableType {
+    match c {
+        Some('i') => VariableType::Int,
+        Some('f') => VariableType::Float,
+        Some('s') => VariableType::ShortString,
+        Some('v') => VariableType::LongString,
+        _ => VariableType::Unknown,
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

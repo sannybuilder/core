@@ -33,7 +33,7 @@ pub fn unary(s: Span) -> R<Node> {
 mod tests {
     use super::*;
     use crate::parser::parse;
-    // #[test]
+    #[test]
     fn test_unary() {
         let (_, ast) = parse("  ~1@  ").unwrap();
 
@@ -71,23 +71,23 @@ mod tests {
 
     #[test]
     fn test_negative_numbers() {
-        let (_, ast) = parse("-1.0").unwrap();
+        let (_, ast) = parse(" -1.0 ").unwrap();
         assert_eq!(
             ast,
             AST {
                 body: vec![Node::Unary(UnaryPrefixExpr {
                     operator: Token {
-                        start: 1,
+                        start: 2,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorMinus,
                     },
                     operand: Box::new(Node::Literal(Token {
-                        start: 2,
+                        start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::FloatLiteral,
                     })),
                     token: Token {
-                        start: 1,
+                        start: 2,
                         len: 4,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
