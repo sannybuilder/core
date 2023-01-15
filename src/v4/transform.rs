@@ -1,4 +1,4 @@
-use super::helpers::*;
+use super::{game::Game, helpers::*};
 use crate::parser::interface::{Node, SyntaxKind, AST};
 
 static OP_AND: &'static str = "BIT_AND";
@@ -17,23 +17,28 @@ static OP_MOD_COMPOUND: &'static str = "MOD_COMPOUND";
 static OP_SHR_COMPOUND: &'static str = "BIT_SHR_COMPOUND";
 static OP_SHL_COMPOUND: &'static str = "BIT_SHL_COMPOUND";
 
-static OP_SET_VAR_INT: &'static str = "SET_VAR_INT";
-static OP_SET_VAR_FLOAT: &'static str = "SET_VAR_FLOAT";
-static OP_SET_LVAR_INT: &'static str = "SET_LVAR_INT";
-static OP_SET_LVAR_FLOAT: &'static str = "SET_LVAR_FLOAT";
-
 static OP_INT_ADD: &'static str = "INT_ADD";
 static OP_INT_SUB: &'static str = "INT_SUB";
 static OP_INT_MUL: &'static str = "INT_MUL";
 static OP_INT_DIV: &'static str = "INT_DIV";
 
-pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
+pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
+    macro_rules! g {
+        ( vcs: ($vcs:expr) else $e:expr) => {
+            if game == Game::vcs {
+                $vcs
+            } else {
+                $e
+            }
+        };
+    }
     let e = ast.body.get(0)?;
 
     match e {
         Node::Unary(e) => {
             if e.get_operator() == &SyntaxKind::OperatorBitwiseNot {
                 if is_variable(&e.operand) {
+                    // ~var
                     return format_unary(OP_NOT_UNARY, token_str(expr, as_token(&e.operand)?));
                 }
             }
@@ -43,6 +48,7 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
             let right = &e.right;
 
             if !is_variable(left) {
+                // todo: 1 > var ?
                 return None;
             }
 
@@ -60,168 +66,106 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
                         token_str(expr, as_token(&unary.operand)?),
                     );
                 }
-                Node::Binary(binary_expr) => match binary_expr.get_operator() {
-                    SyntaxKind::OperatorBitwiseAnd => {
-                        return format_ternary(
-                            OP_AND,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                Node::Binary(binary_expr) => {
+                    macro_rules! ternary {
+                        ($op:expr) => {
+                            format_ternary(
+                                $op,
+                                token_str(expr, left_token),
+                                token_str(expr, as_token(&binary_expr.left)?),
+                                token_str(expr, as_token(&binary_expr.right)?),
+                            )
+                        };
                     }
-                    SyntaxKind::OperatorBitwiseOr => {
-                        return format_ternary(
-                            OP_OR,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                    match binary_expr.get_operator() {
+                        // var = var & var
+                        SyntaxKind::OperatorBitwiseAnd => return ternary!(OP_AND),
+                        // var = var | var
+                        SyntaxKind::OperatorBitwiseOr => return ternary!(OP_OR),
+                        // var = var ^ var
+                        SyntaxKind::OperatorBitwiseXor => return ternary!(OP_XOR),
+                        // var = var % var
+                        SyntaxKind::OperatorBitwiseMod => return ternary!(OP_MOD),
+                        // var = var >> var
+                        SyntaxKind::OperatorBitwiseShr => return ternary!(OP_SHR),
+                        // var = var << var
+                        SyntaxKind::OperatorBitwiseShl => return ternary!(OP_SHL),
+                        // var = var + var
+                        SyntaxKind::OperatorPlus => return ternary!(OP_INT_ADD),
+                        // var = var - var
+                        SyntaxKind::OperatorMinus => return ternary!(OP_INT_SUB),
+                        // var = var * var
+                        SyntaxKind::OperatorMul => return ternary!(OP_INT_MUL),
+                        // var = var / var
+                        SyntaxKind::OperatorDiv => return ternary!(OP_INT_DIV),
+                        _ => return None,
                     }
-                    SyntaxKind::OperatorBitwiseXor => {
-                        return format_ternary(
-                            OP_XOR,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorBitwiseMod => {
-                        return format_ternary(
-                            OP_MOD,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorBitwiseShr => {
-                        return format_ternary(
-                            OP_SHR,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorBitwiseShl => {
-                        return format_ternary(
-                            OP_SHL,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorPlus => {
-                        return format_ternary(
-                            OP_INT_ADD,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorMinus => {
-                        return format_ternary(
-                            OP_INT_SUB,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorMul => {
-                        return format_ternary(
-                            OP_INT_MUL,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    SyntaxKind::OperatorDiv => {
-                        return format_ternary(
-                            OP_INT_DIV,
-                            token_str(expr, left_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
-                        )
-                    }
-                    _ => return None,
-                },
+                }
                 _ => {
                     let right_token = as_token(&right)?;
+                    macro_rules! binary {
+                        ($op:expr) => {
+                            format_binary(
+                                $op,
+                                token_str(expr, left_token),
+                                token_str(expr, right_token),
+                            )
+                        };
+                    }
                     match e.get_operator() {
-                        SyntaxKind::OperatorBitwiseAndEqual => {
-                            return format_binary(
-                                OP_AND_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
-                        SyntaxKind::OperatorBitwiseOrEqual => {
-                            return format_binary(
-                                OP_OR_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
-                        SyntaxKind::OperatorBitwiseXorEqual => {
-                            return format_binary(
-                                OP_XOR_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
-                        SyntaxKind::OperatorBitwiseModEqual => {
-                            return format_binary(
-                                OP_MOD_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
-                        SyntaxKind::OperatorBitwiseShrEqual => {
-                            return format_binary(
-                                OP_SHR_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
-                        SyntaxKind::OperatorBitwiseShlEqual => {
-                            return format_binary(
-                                OP_SHL_COMPOUND,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
-                        }
+                        // var &= var
+                        SyntaxKind::OperatorBitwiseAndEqual => return binary!(OP_AND_COMPOUND),
+                        // var |= var
+                        SyntaxKind::OperatorBitwiseOrEqual => return binary!(OP_OR_COMPOUND),
+                        // var ^= var
+                        SyntaxKind::OperatorBitwiseXorEqual => return binary!(OP_XOR_COMPOUND),
+                        // var %= var
+                        SyntaxKind::OperatorBitwiseModEqual => return binary!(OP_MOD_COMPOUND),
+                        // var >>= var
+                        SyntaxKind::OperatorBitwiseShrEqual => return binary!(OP_SHR_COMPOUND),
+                        // var <<= var
+                        SyntaxKind::OperatorBitwiseShlEqual => return binary!(OP_SHL_COMPOUND),
+
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(left)?;
                             match right_token.syntax_kind {
+                                // var = int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
-                                    // var = int
-                                    return format_binary(
-                                        OP_SET_VAR_INT,
-                                        token_str(expr, left_token),
-                                        token_str(expr, right_token),
-                                    );
+                                    return binary!(g!(vcs: ("0004:") else "0004:"));
                                 }
+                                // var = float
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
-                                    // var = float
-                                    return format_binary(
-                                        OP_SET_VAR_FLOAT,
-                                        token_str(expr, left_token),
-                                        token_str(expr, right_token),
-                                    );
+                                    return binary!(g!(vcs: ("0005:") else "0005:"));
                                 }
+                                // lvar = int
                                 SyntaxKind::IntegerLiteral if left_var.is_local() => {
-                                    // lvar = int
-                                    return format_binary(
-                                        OP_SET_LVAR_INT,
-                                        token_str(expr, left_token),
-                                        token_str(expr, right_token),
-                                    );
+                                    return binary!(g!(vcs: ("0004:") else "0006:"));
                                 }
+                                // lvar = float
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
-                                    // lvar = float
-                                    return format_binary(
-                                        OP_SET_LVAR_FLOAT,
-                                        token_str(expr, left_token),
-                                        token_str(expr, right_token),
-                                    );
+                                    return binary!(g!(vcs: ("0005:") else "0007:"));
+                                }
+                                _ => {}
+                            }
+                        }
+                        SyntaxKind::OperatorPlusEqual => {
+                            let left_var = as_variable(left)?;
+                            match right_token.syntax_kind {
+                                // var += int
+                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("0007:") else "0008:"));
+                                }
+                                // var += float
+                                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("0008:") else "0009:"));
+                                }
+                                // lvar += int
+                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("0007:") else "000A:"));
+                                }
+                                // lvar += float
+                                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("0008:") else "000B:"));
                                 }
                                 _ => {}
                             }

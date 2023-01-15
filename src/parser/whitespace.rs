@@ -1,9 +1,8 @@
 use nom::bytes::complete::is_not;
+use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 use nom::character::complete::char;
-use nom::character::complete::one_of;
 use nom::character::complete::space1;
-use nom::combinator::eof;
 use nom::combinator::not;
 use nom::combinator::peek;
 use nom::combinator::value;
@@ -13,8 +12,8 @@ use nom::sequence::pair;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 use nom::IResult;
-use nom::{branch::alt, character::complete::multispace1};
-use nom::{bytes::complete::tag, character::complete::multispace0};
+use nom::branch::alt;
+use nom::character::complete::multispace1;
 
 use crate::parser::interface::*;
 
@@ -45,7 +44,6 @@ where
         many0(alt((inline_comment, eol_comment, value((), multispace1)))),
     )
 }
-
 
 /** standalone line */
 // todo: should end with eol

@@ -9,7 +9,6 @@ use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 
-use crate::parser::whitespace;
 use crate::parser::interface::*;
 use crate::parser::literal;
 
