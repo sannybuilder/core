@@ -558,4 +558,53 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_parser_variables15() {
+        let (_, ast) = parse("$var($index,10)").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::ArrayElement(ArrayElementSCR {
+                    array_var: Box::new(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            len: 4,
+                            start: 1,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    })),
+                    index_var: Box::new(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 7,
+                            len: 5,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 6,
+                            len: 6,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    })),
+                    _type: VariableType::Unknown,
+                    len: Token {
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                        start: 13,
+                        len: 2
+                    },
+                    token: Token {
+                        syntax_kind: SyntaxKind::ArrayElementSCR,
+                        start: 1,
+                        len: 15,
+                    }
+                }))]
+            }
+        );
+    }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "sanny_builder_core"
-version = "0.2.5"
+version = "0.2.6"
 authors = ["Seemann <mail@sannybuilder.com>"]
 edition = "2021"
 
@@ -12,8 +12,8 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 libc = "0.2.79"
-nom = "6.0.1"
-nom_locate = "3.0.0"
+nom = "7.1.2"
+nom_locate = "4.0.0"
 hotwatch = "0.4.5"
 lazy_static = "1.4.0"
 log = { version = "0.4.14", features = ["max_level_debug", "release_max_level_off"] }

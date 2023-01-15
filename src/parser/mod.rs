@@ -10,6 +10,7 @@ mod declaration;
 mod expression;
 mod helpers;
 mod literal;
+mod string;
 mod operator;
 mod statement;
 mod unary;
