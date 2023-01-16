@@ -154,6 +154,35 @@ impl Variable {
             _ => false,
         }
     }
+    pub fn is_integer(&self) -> bool {
+        match self {
+            Variable::Global(v) => v.is_integer(),
+            Variable::Local(v) => v.is_integer(),
+            Variable::Indexed(v) => v.var.is_integer(),
+            Variable::ArrayElement(v) => v._type == VariableType::Int,
+            Variable::Adma(v) => v.is_integer(),
+        }
+    }
+    pub fn is_float(&self) -> bool {
+        match self {
+            Variable::Global(v) => v.is_float(),
+            Variable::Local(v) => v.is_float(),
+            Variable::Indexed(v) => v.var.is_float(),
+            Variable::ArrayElement(v) => v._type == VariableType::Float,
+            Variable::Adma(v) => v.is_float(),
+        }
+    }
+    pub fn is_string(&self) -> bool {
+        match self {
+            Variable::Global(v) => v.is_string(),
+            Variable::Local(v) => v.is_string(),
+            Variable::Indexed(v) => v.var.is_string(),
+            Variable::ArrayElement(v) => {
+                v._type == VariableType::ShortString || v._type == VariableType::LongString
+            }
+            Variable::Adma(v) => v.is_string(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -220,6 +249,18 @@ pub struct SingleVariable {
     pub token: Token,
     /// variable type (i,f,s,v, or unknown)
     pub _type: VariableType,
+}
+
+impl SingleVariable {
+    pub fn is_integer(&self) -> bool {
+        self._type == VariableType::Int
+    }
+    pub fn is_float(&self) -> bool {
+        self._type == VariableType::Float
+    }
+    pub fn is_string(&self) -> bool {
+        self._type == VariableType::ShortString || self._type == VariableType::LongString
+    }
 }
 
 #[derive(Debug, PartialEq)]
