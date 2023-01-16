@@ -37,9 +37,9 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
     match e {
         Node::Unary(e) => {
             if e.get_operator() == &SyntaxKind::OperatorBitwiseNot {
-                if is_variable(&e.operand) {
+                if e.get_operand().is_variable() {
                     // ~var
-                    return format_unary(OP_NOT_UNARY, token_str(expr, as_token(&e.operand)?));
+                    return format_unary(OP_NOT_UNARY, e.get_operand().get_text(expr));
                 }
             }
         }
@@ -47,12 +47,10 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
             let left = &e.left;
             let right = &e.right;
 
-            if !is_variable(left) {
+            if !left.is_variable() {
                 // todo: 1 > var ?
                 return None;
             }
-
-            let left_token = as_token(&left)?;
 
             match right.as_ref() {
                 Node::Unary(unary)
@@ -62,8 +60,8 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                     // var = ~var
                     return format_binary(
                         OP_NOT,
-                        token_str(expr, left_token),
-                        token_str(expr, as_token(&unary.operand)?),
+                        left.get_text(expr),
+                        unary.get_operand().get_text(expr),
                     );
                 }
                 Node::Binary(binary_expr) => {
@@ -71,9 +69,9 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                         ($op:expr) => {
                             format_ternary(
                                 $op,
-                                token_str(expr, left_token),
-                                token_str(expr, as_token(&binary_expr.left)?),
-                                token_str(expr, as_token(&binary_expr.right)?),
+                                left.get_text(expr),
+                                binary_expr.left.get_text(expr),
+                                binary_expr.right.get_text(expr),
                             )
                         };
                     }
@@ -102,14 +100,9 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                     }
                 }
                 _ => {
-                    let right_token = as_token(&right)?;
                     macro_rules! binary {
                         ($op:expr) => {
-                            format_binary(
-                                $op,
-                                token_str(expr, left_token),
-                                token_str(expr, right_token),
-                            )
+                            format_binary($op, left.get_text(expr), right.get_text(expr))
                         };
                     }
                     match e.get_operator() {
@@ -126,9 +119,10 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                         // var <<= var
                         SyntaxKind::OperatorBitwiseShlEqual => return binary!(OP_SHL_COMPOUND),
 
-                        SyntaxKind::OperatorEqual => {
-                            let left_var = as_variable(left)?;
-                            match right_token.syntax_kind {
+                        SyntaxKind::OperatorEqual if right.is_literal() => {
+                            let left_var = left.as_variable()?;
+                            let literal = right.as_literal()?;
+                            match literal.syntax_kind {
                                 // var = int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
                                     return binary!(g!(vcs: ("0004:") else "0004:"));
@@ -148,9 +142,10 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                                 _ => {}
                             }
                         }
-                        SyntaxKind::OperatorPlusEqual => {
-                            let left_var = as_variable(left)?;
-                            match right_token.syntax_kind {
+                        SyntaxKind::OperatorPlusEqual if right.is_literal() => {
+                            let left_var = left.as_variable()?;
+                            let literal = right.as_literal()?;
+                            match literal.syntax_kind {
                                 // var += int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
                                     return binary!(g!(vcs: ("0007:") else "0008:"));
@@ -166,6 +161,75 @@ pub fn try_tranform(ast: &AST, expr: &str, game: Game) -> Option<String> {
                                 // lvar += float
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
                                     return binary!(g!(vcs: ("0008:") else "000B:"));
+                                }
+                                _ => {}
+                            }
+                        }
+                        SyntaxKind::OperatorMinusEqual if right.is_literal() => {
+                            let left_var = left.as_variable()?;
+                            let literal = right.as_literal()?;
+                            match literal.syntax_kind {
+                                // var -= int
+                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("0009:") else "000C:"));
+                                }
+                                // var -= float
+                                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("000A:") else "000D:"));
+                                }
+                                // lvar -= int
+                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("0009:") else "000E:"));
+                                }
+                                // lvar -= float
+                                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("000A:") else "000F:"));
+                                }
+                                _ => {}
+                            }
+                        }
+                        SyntaxKind::OperatorMulEqual if right.is_literal() => {
+                            let left_var = left.as_variable()?;
+                            let literal = right.as_literal()?;
+                            match literal.syntax_kind {
+                                // var *= int
+                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("000B:") else "0010:"));
+                                }
+                                // var *= float
+                                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("000C:") else "0011:"));
+                                }
+                                // lvar *= int
+                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("000B:") else "0012:"));
+                                }
+                                // lvar *= float
+                                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("000C:") else "0013:"));
+                                }
+                                _ => {}
+                            }
+                        }
+                        SyntaxKind::OperatorDivEqual if right.is_literal() => {
+                            let left_var = left.as_variable()?;
+                            let literal = right.as_literal()?;
+                            match literal.syntax_kind {
+                                // var /= int
+                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("000D:") else "0014:"));
+                                }
+                                // var /= float
+                                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                                    return binary!(g!(vcs: ("000E:") else "0015:"));
+                                }
+                                // lvar /= int
+                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("000D:") else "0016:"));
+                                }
+                                // lvar /= float
+                                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                                    return binary!(g!(vcs: ("000E:") else "0017:"));
                                 }
                                 _ => {}
                             }

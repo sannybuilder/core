@@ -6,19 +6,19 @@ use nom::sequence::tuple;
 use crate::parser::interface::*;
 use crate::parser::literal;
 use crate::parser::operator;
-use crate::parser::variable;
 use crate::parser::string;
+use crate::parser::variable;
 
 pub fn unary(s: Span) -> R<Node> {
     alt((
         map(
             consumed(tuple((operator::unary, unary))),
             |(span, (operator, right))| {
-                Node::Unary(UnaryPrefixExpr {
+                Node::Unary(UnaryPrefixExpr::new(
                     operator,
-                    operand: Box::new(right),
-                    token: Token::from(span, SyntaxKind::UnaryPrefixExpr),
-                })
+                    Box::new(right),
+                    Token::from(span, SyntaxKind::UnaryPrefixExpr),
+                ))
             },
         ),
         alt((
@@ -40,13 +40,13 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr {
-                    operator: Token {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
                         start: 3,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorBitwiseNot,
                     },
-                    operand: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                    Box::new(Node::Variable(Variable::Local(SingleVariable {
                         name: Token {
                             start: 4,
                             len: 1,
@@ -59,12 +59,12 @@ mod tests {
                             syntax_kind: SyntaxKind::LocalVariable,
                         }
                     }))),
-                    token: Token {
+                    Token {
                         start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
-                })]
+                ))]
             }
         )
     }
@@ -75,23 +75,23 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr {
-                    operator: Token {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
                         start: 2,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorMinus,
                     },
-                    operand: Box::new(Node::Literal(Token {
+                    Box::new(Node::Literal(Token {
                         start: 3,
                         len: 3,
                         syntax_kind: SyntaxKind::FloatLiteral,
                     })),
-                    token: Token {
+                    Token {
                         start: 2,
                         len: 4,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
-                })]
+                ))]
             }
         );
 
@@ -99,23 +99,23 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr {
-                    operator: Token {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
                         start: 1,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorMinus,
                     },
-                    operand: Box::new(Node::Literal(Token {
+                    Box::new(Node::Literal(Token {
                         start: 2,
                         len: 5,
                         syntax_kind: SyntaxKind::IntegerLiteral,
                     })),
-                    token: Token {
+                    Token {
                         start: 1,
                         len: 6,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
-                })]
+                ))]
             }
         );
 
@@ -123,23 +123,23 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr {
-                    operator: Token {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
                         start: 1,
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorMinus,
                     },
-                    operand: Box::new(Node::Literal(Token {
+                    Box::new(Node::Literal(Token {
                         start: 4,
                         len: 3,
                         syntax_kind: SyntaxKind::HexadecimalLiteral,
                     })),
-                    token: Token {
+                    Token {
                         start: 1,
                         len: 6,
                         syntax_kind: SyntaxKind::UnaryPrefixExpr,
                     },
-                })]
+                ))]
             }
         );
     }

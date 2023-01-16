@@ -63,6 +63,11 @@ impl Token {
             syntax_kind,
         }
     }
+    pub fn get_text<'a>(&self, s: &'a str) -> &'a str {
+        let start = self.start - 1;
+        let end = start + self.len;
+        &s[start..end]
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,13 +83,57 @@ pub enum Node {
     ConstDeclaration(ConstDeclaration),
 }
 
+impl Node {
+    pub fn is_variable(&self) -> bool {
+        self.as_variable().is_some()
+    }
+
+    pub fn as_variable(&self) -> Option<&Variable> {
+        match self {
+            Node::Variable(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn as_token(&self) -> &Token {
+        match self {
+            Node::Literal(e) => e,
+            Node::Unary(e) => &e.get_token(),
+            Node::Variable(e) => match e {
+                Variable::Local(v) => &v.token,
+                Variable::Global(v) => &v.token,
+                Variable::ArrayElement(v) => &v.token,
+                Variable::Indexed(v) => &v.token,
+                Variable::Adma(v) => &v.token,
+            },
+            Node::Binary(b) => &b.token,
+            Node::ConstDeclaration(d) => &d.token,
+        }
+    }
+
+    pub fn is_literal(&self) -> bool {
+        self.as_literal().is_some()
+    }
+
+    pub fn as_literal(&self) -> Option<&Token> {
+        match self {
+            Node::Literal(e) => Some(e),
+            Node::Unary(e) => e.get_operand().as_literal(),
+            _ => None,
+        }
+    }
+    pub fn get_text<'a>(&self, s: &'a str) -> &'a str {
+        self.as_token().get_text(s)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Variable {
     Global(SingleVariable),
     Local(SingleVariable),
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
-    Adma(SingleVariable)
+    Adma(SingleVariable),
 }
 
 impl Variable {
@@ -108,24 +157,37 @@ impl Variable {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct UnaryPrefixExpr {
+    operator: Token,
+    operand: Box<Node>,
+    token: Token,
+}
+
+impl UnaryPrefixExpr {
+    pub fn new(operator: Token, operand: Box<Node>, token: Token) -> Self {
+        Self {
+            operator,
+            operand,
+            token,
+        }
+    }
+    pub fn get_operator(&self) -> &SyntaxKind {
+        &self.operator.syntax_kind
+    }
+    pub fn get_operand(&self) -> &Node {
+        &self.operand
+    }
+    pub fn get_token(&self) -> &Token {
+        &self.token
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct BinaryExpr {
     pub left: Box<Node>,
     pub operator: Token,
     pub right: Box<Node>,
     pub token: Token,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct UnaryPrefixExpr {
-    pub operator: Token,
-    pub operand: Box<Node>,
-    pub token: Token,
-}
-
-impl UnaryPrefixExpr {
-    pub fn get_operator(&self) -> &SyntaxKind {
-        &self.operator.syntax_kind
-    }
 }
 
 impl BinaryExpr {
