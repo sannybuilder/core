@@ -9,10 +9,32 @@ use crate::parser::operator;
 use crate::parser::string;
 use crate::parser::variable;
 
+use super::binary;
+
 pub fn unary(s: Span) -> R<Node> {
     alt((
         map(
-            consumed(tuple((operator::unary, unary))),
+            consumed(tuple((operator::op_minus, literal::number))),
+            |(span, (operator, right))| {
+                Node::Unary(UnaryPrefixExpr::new(
+                    operator,
+                    Box::new(Node::Literal(right)),
+                    Token::from(span, SyntaxKind::UnaryPrefixExpr),
+                ))
+            },
+        ),
+        map(
+            consumed(tuple((operator::op_bitwise_not, variable::variable))),
+            |(span, (operator, right))| {
+                Node::Unary(UnaryPrefixExpr::new(
+                    operator,
+                    Box::new(Node::Variable(right)),
+                    Token::from(span, SyntaxKind::UnaryPrefixExpr),
+                ))
+            },
+        ),
+        map(
+            consumed(tuple((operator::op_not, binary::assignment))),
             |(span, (operator, right))| {
                 Node::Unary(UnaryPrefixExpr::new(
                     operator,
@@ -21,11 +43,9 @@ pub fn unary(s: Span) -> R<Node> {
                 ))
             },
         ),
-        alt((
-            map(variable::variable, |v| Node::Variable(v)),
-            map(literal::number, |n| Node::Literal(n)),
-            map(string::string, |n| Node::Literal(n)),
-        )),
+        map(variable::variable, |v| Node::Variable(v)),
+        map(literal::number, |n| Node::Literal(n)),
+        map(string::string, |n| Node::Literal(n)),
     ))(s)
 }
 
@@ -66,7 +86,90 @@ mod tests {
                     },
                 ))]
             }
-        )
+        );
+
+        // not 0@
+        let (_, ast) = parse("not 0@").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
+                        start: 1,
+                        len: 3,
+                        syntax_kind: SyntaxKind::OperatorNot,
+                    },
+                    Box::new(Node::Variable(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 5,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral,
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 5,
+                            len: 2,
+                            syntax_kind: SyntaxKind::LocalVariable,
+                        }
+                    }))),
+                    Token {
+                        start: 1,
+                        len: 6,
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                    },
+                ))]
+            }
+        );
+
+        // not 0@ <= 1
+        let (_, ast) = parse("not 0@ <= 1").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr::new(
+                    Token {
+                        start: 1,
+                        len: 3,
+                        syntax_kind: SyntaxKind::OperatorNot,
+                    },
+                    Box::new(Node::Binary(BinaryExpr {
+                        left: Box::new(Node::Variable(Variable::Local(SingleVariable {
+                            name: Token {
+                                start: 5,
+                                len: 1,
+                                syntax_kind: SyntaxKind::IntegerLiteral,
+                            },
+                            _type: VariableType::Unknown,
+                            token: Token {
+                                start: 5,
+                                len: 2,
+                                syntax_kind: SyntaxKind::LocalVariable,
+                            }
+                        }))),
+                        operator: Token {
+                            start: 8,
+                            len: 2,
+                            syntax_kind: SyntaxKind::OperatorLessEqual,
+                        },
+                        right: Box::new(Node::Literal(Token {
+                            start: 11,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral,
+                        })),
+                        token: Token {
+                            start: 5,
+                            len: 7,
+                            syntax_kind: SyntaxKind::BinaryExpr,
+                        }
+                    })),
+                    Token {
+                        start: 1,
+                        len: 11,
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                    },
+                ))]
+            }
+        );
     }
 
     #[test]

@@ -46,6 +46,7 @@ pub enum SyntaxKind {
     OperatorGreaterEqual,    // >=
     OperatorLess,            // <
     OperatorLessEqual,       // <=
+    OperatorNot,             // not
 }
 
 #[derive(Debug, PartialEq)]

@@ -1,6 +1,8 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::character::complete::multispace1;
 use nom::combinator::map;
+use nom::sequence::terminated;
 
 use crate::parser::interface::*;
 
@@ -32,16 +34,13 @@ pub fn bitwise(s: Span) -> R<Token> {
     ))(s)
 }
 
-pub fn unary(s: Span) -> R<Token> {
-    alt((op_minus, op_bitwise_not))(s)
-}
 
 pub fn equality(s: Span) -> R<Token> {
     alt((op_equal_equal, op_less_greater))(s)
 }
 
 pub fn comparison(s: Span) -> R<Token> {
-    alt((op_greater_equal, op_greater, op_less, op_less_equal))(s)
+    alt((op_greater_equal, op_less_equal, op_greater, op_less))(s)
 }
 
 pub fn add_sub(s: Span) -> R<Token> {
@@ -52,7 +51,7 @@ pub fn mul_div(s: Span) -> R<Token> {
     alt((op_mul, op_div))(s)
 }
 
-fn op_bitwise_not(s: Span) -> R<Token> {
+pub fn op_bitwise_not(s: Span) -> R<Token> {
     map(tag("~"), |s: Span| {
         Token::from(s, SyntaxKind::OperatorBitwiseNot)
     })(s)
@@ -98,7 +97,7 @@ fn op_plus(s: Span) -> R<Token> {
     map(tag("+"), |s: Span| Token::from(s, SyntaxKind::OperatorPlus))(s)
 }
 
-fn op_minus(s: Span) -> R<Token> {
+pub fn op_minus(s: Span) -> R<Token> {
     map(tag("-"), |s: Span| {
         Token::from(s, SyntaxKind::OperatorMinus)
     })(s)
@@ -215,5 +214,11 @@ fn op_bitwise_shr_equal(s: Span) -> R<Token> {
 fn op_bitwise_shl_equal(s: Span) -> R<Token> {
     map(tag("<<="), |s: Span| {
         Token::from(s, SyntaxKind::OperatorBitwiseShlEqual)
+    })(s)
+}
+
+pub fn op_not(s: Span) -> R<Token> {
+    map(terminated(tag("not"), multispace1), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorNot)
     })(s)
 }
