@@ -5,10 +5,10 @@ use nom::sequence::{delimited, separated_pair};
 use nom::{branch::alt, combinator::consumed};
 
 use crate::parser::expression;
-use crate::parser::whitespace;
 use crate::parser::interface::*;
 use crate::parser::literal;
 use crate::parser::statement;
+use crate::parser::whitespace;
 
 pub fn declaration(s: Span) -> R<Node> {
     alt((statement::statement, const_declaration))(s)
@@ -69,11 +69,14 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Literal(Token {
-                            start: 9,
-                            len: 1,
-                            syntax_kind: SyntaxKind::IntegerLiteral
-                        })),
+                        value: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                            value: 1,
+                            token: Token {
+                                start: 9,
+                                len: 1,
+                                syntax_kind: SyntaxKind::IntegerLiteral
+                            }
+                        }))),
                         token: Token {
                             start: 5,
                             len: 5,
@@ -86,11 +89,14 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Literal(Token {
-                            start: 9,
-                            len: 3,
-                            syntax_kind: SyntaxKind::FloatLiteral
-                        })),
+                        value: Box::new(Node::Literal(Literal::Float(FloatLiteral {
+                            value: 2.0,
+                            token: Token {
+                                start: 9,
+                                len: 3,
+                                syntax_kind: SyntaxKind::FloatLiteral
+                            }
+                        }))),
                         token: Token {
                             start: 5,
                             len: 7,

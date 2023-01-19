@@ -9,16 +9,18 @@ use whitespace::mws;
 mod binary;
 mod declaration;
 mod expression;
-mod whitespace;
 mod literal;
-mod string;
 mod operator;
 mod statement;
+mod string;
 mod unary;
 mod variable;
+mod whitespace;
 
 pub fn parse(s: &str) -> R<AST> {
-    all_consuming(map(many1(mws(declaration::declaration)), |body| AST { body }))(Span::from(s))
+    all_consuming(map(many1(mws(declaration::declaration)), |body| AST {
+        body,
+    }))(Span::from(s))
 }
 
 #[cfg(test)]
@@ -50,11 +52,14 @@ mod tests {
                         start: 4,
                         len: 1
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 14,
-                        len: 3,
-                        syntax_kind: SyntaxKind::IntegerLiteral
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 256,
+                        token: Token {
+                            start: 14,
+                            len: 3,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 16,
@@ -71,11 +76,14 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Literal(Token {
-                    start: 1,
-                    len: 1,
-                    syntax_kind: SyntaxKind::IntegerLiteral
-                })]
+                body: vec![Node::Literal(Literal::Int(IntLiteral {
+                    value: 1,
+                    token: Token {
+                        start: 1,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral
+                    }
+                })),]
             }
         );
     }
@@ -92,11 +100,14 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Literal(Token {
-                    start: 11,
-                    len: 1,
-                    syntax_kind: SyntaxKind::IntegerLiteral
-                })]
+                body: vec![Node::Literal(Literal::Int(IntLiteral {
+                    value: 5,
+                    token: Token {
+                        start: 11,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral
+                    }
+                })),]
             }
         );
     }

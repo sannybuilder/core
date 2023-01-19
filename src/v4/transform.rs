@@ -108,12 +108,22 @@ pub fn try_transform(e: &Node, expr: &str, game: Game, not: bool) -> Option<Stri
                             );
                         }
                         SyntaxKind::OperatorLessEqual => {
-
                             // <= :: not >
                             return transform_binary(
                                 left,
                                 right,
                                 &SyntaxKind::OperatorGreater,
+                                &game,
+                                expr,
+                                !not,
+                            );
+                        }
+                        SyntaxKind::OperatorNotEqual => {
+                            // <> :: not ==
+                            return transform_binary(
+                                left,
+                                right,
+                                &SyntaxKind::OperatorEqualEqual,
                                 &game,
                                 expr,
                                 !not,
@@ -148,10 +158,14 @@ fn transform_binary(
     expr: &str,
     not: bool,
 ) -> Option<String> {
-
     macro_rules! binary {
         ($op:expr) => {
-            format_binary($op, left.get_text(expr), right.get_text(expr))
+            Some(format!(
+                "{} {} {}",
+                $op,
+                left.get_text(expr),
+                right.get_text(expr)
+            ))
         };
     }
     macro_rules! g {
@@ -190,26 +204,28 @@ fn transform_binary(
         SyntaxKind::OperatorEqual if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+            if left_var.is_global() {
                 // var = int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0004; else 0x0004));
                 }
                 // var = float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0005; else 0x0005));
                 }
+            }
+            if left_var.is_local() {
                 // lvar = int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0004; else 0x0006));
                 }
                 // lvar = float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0005; else 0x0007));
                 }
-                _ => {}
             }
         }
+
         SyntaxKind::OperatorEqual if left.is_variable() && right.is_variable() => {
             let left_var = left.as_variable()?;
             let right_var = right.as_variable()?;
@@ -253,24 +269,26 @@ fn transform_binary(
         SyntaxKind::OperatorPlusEqual if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+
+            if left_var.is_global() {
                 // var += int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0007; else 0x0008));
                 }
                 // var += float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0008; else 0x0009));
                 }
+            }
+            if left_var.is_local() {
                 // lvar += int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0007; else 0x000A));
                 }
                 // lvar += float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0008; else 0x000B));
                 }
-                _ => {}
             }
         }
         SyntaxKind::OperatorPlusEqual if left.is_variable() && right.is_variable() => {
@@ -316,24 +334,26 @@ fn transform_binary(
         SyntaxKind::OperatorMinusEqual if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+
+            if left_var.is_global() {
                 // var -= int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0009; else 0x000C));
                 }
                 // var -= float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000A; else 0x000D));
                 }
+            }
+            if left_var.is_local() {
                 // lvar -= int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0009; else 0x000E));
                 }
                 // lvar -= float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000A; else 0x000F));
                 }
-                _ => {}
             }
         }
         SyntaxKind::OperatorMinusEqual if left.is_variable() && right.is_variable() => {
@@ -379,24 +399,26 @@ fn transform_binary(
         SyntaxKind::OperatorMulEqual if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+
+            if left_var.is_global() {
                 // var *= int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000B; else 0x0010));
                 }
                 // var *= float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000C; else 0x0011));
                 }
+            }
+            if left_var.is_local() {
                 // lvar *= int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000B; else 0x0012));
                 }
                 // lvar *= float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000C; else 0x0013));
                 }
-                _ => {}
             }
         }
         SyntaxKind::OperatorMulEqual if left.is_variable() && right.is_variable() => {
@@ -442,24 +464,26 @@ fn transform_binary(
         SyntaxKind::OperatorDivEqual if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+
+            if left_var.is_global() {
                 // var /= int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000D; else 0x0014));
                 }
                 // var /= float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000E; else 0x0015));
                 }
+            }
+            if left_var.is_local() {
                 // lvar /= int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000D; else 0x0016));
                 }
                 // lvar /= float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x000E; else 0x0017));
                 }
-                _ => {}
             }
         }
         SyntaxKind::OperatorDivEqual if left.is_variable() && right.is_variable() => {
@@ -505,24 +529,26 @@ fn transform_binary(
         SyntaxKind::OperatorGreater if left.is_variable() && right.is_literal() => {
             let left_var = left.as_variable()?;
             let literal = right.as_literal()?;
-            match literal.syntax_kind {
+
+            if left_var.is_global() {
                 // var > int
-                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000F; else 0x0018));
                 }
                 // var > float
-                SyntaxKind::FloatLiteral if left_var.is_global() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0012; else 0x0020));
                 }
+            }
+            if left_var.is_local() {
                 // lvar > int
-                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x000F; else 0x0019));
                 }
                 // lvar > float
-                SyntaxKind::FloatLiteral if left_var.is_local() => {
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0012; else 0x0021));
                 }
-                _ => {}
             }
         }
         SyntaxKind::OperatorGreater if left.is_variable() && right.is_variable() => {
@@ -567,27 +593,28 @@ fn transform_binary(
         }
         // literal > var
         SyntaxKind::OperatorGreater if left.is_literal() && right.is_variable() => {
-            let left_literal = left.as_literal()?;
+            let literal = left.as_literal()?;
             let right_var = right.as_variable()?;
 
-            match left_literal.syntax_kind {
-                // int > var
-                SyntaxKind::IntegerLiteral if right_var.is_global() => {
+            if right_var.is_global() {
+                // var > int
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0010; else 0x001A));
                 }
-                // float > var
-                SyntaxKind::FloatLiteral if right_var.is_global() => {
+                // var > float
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0013; else 0x0022));
                 }
-                // int > lvar
-                SyntaxKind::IntegerLiteral if right_var.is_local() => {
+            }
+            if right_var.is_local() {
+                // lvar > int
+                if literal.is_integer() {
                     return binary!(g!(vcs: 0x0010; else 0x001B));
                 }
-                // float > lvar
-                SyntaxKind::FloatLiteral if right_var.is_local() => {
+                // lvar > float
+                if literal.is_float() {
                     return binary!(g!(vcs: 0x0013; else 0x0023));
                 }
-                _ => {}
             }
         }
         _ => {}

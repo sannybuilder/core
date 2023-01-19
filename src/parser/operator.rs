@@ -36,7 +36,7 @@ pub fn bitwise(s: Span) -> R<Token> {
 
 
 pub fn equality(s: Span) -> R<Token> {
-    alt((op_equal_equal, op_less_greater))(s)
+    alt((op_equal_equal, op_not_equal))(s)
 }
 
 pub fn comparison(s: Span) -> R<Token> {
@@ -133,9 +133,9 @@ fn op_less_equal(s: Span) -> R<Token> {
     })(s)
 }
 
-fn op_less_greater(s: Span) -> R<Token> {
+fn op_not_equal(s: Span) -> R<Token> {
     map(tag("<>"), |s: Span| {
-        Token::from(s, SyntaxKind::OperatorLessGreater)
+        Token::from(s, SyntaxKind::OperatorNotEqual)
     })(s)
 }
 

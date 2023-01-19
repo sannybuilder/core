@@ -15,12 +15,18 @@ pub fn unary(s: Span) -> R<Node> {
     alt((
         map(
             consumed(tuple((operator::op_minus, literal::number))),
-            |(span, (operator, right))| {
-                Node::Unary(UnaryPrefixExpr::new(
-                    operator,
-                    Box::new(Node::Literal(right)),
-                    Token::from(span, SyntaxKind::UnaryPrefixExpr),
-                ))
+            |(span, (_operator, right))| {
+                Node::Literal(match right {
+                    Literal::Int(i) => Literal::Int(IntLiteral {
+                        value: -i.value,
+                        token: Token::from(span, i.token.syntax_kind),
+                    }),
+                    Literal::Float(f) => Literal::Float(FloatLiteral {
+                        value: -f.value,
+                        token: Token::from(span, SyntaxKind::FloatLiteral),
+                    }),
+                    _ => unreachable!(),
+                })
             },
         ),
         map(
@@ -45,7 +51,7 @@ pub fn unary(s: Span) -> R<Node> {
         ),
         map(variable::variable, |v| Node::Variable(v)),
         map(literal::number, |n| Node::Literal(n)),
-        map(string::string, |n| Node::Literal(n)),
+        map(string::string, |n| Node::Literal(Literal::String(n))),
     ))(s)
 }
 
@@ -151,11 +157,14 @@ mod tests {
                             len: 2,
                             syntax_kind: SyntaxKind::OperatorLessEqual,
                         },
-                        right: Box::new(Node::Literal(Token {
-                            start: 11,
-                            len: 1,
-                            syntax_kind: SyntaxKind::IntegerLiteral,
-                        })),
+                        right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                            value: 1,
+                            token: Token {
+                                start: 11,
+                                len: 1,
+                                syntax_kind: SyntaxKind::IntegerLiteral,
+                            }
+                        }))),
                         token: Token {
                             start: 5,
                             len: 7,
@@ -178,23 +187,14 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr::new(
-                    Token {
-                        start: 2,
-                        len: 1,
-                        syntax_kind: SyntaxKind::OperatorMinus,
-                    },
-                    Box::new(Node::Literal(Token {
-                        start: 3,
-                        len: 3,
-                        syntax_kind: SyntaxKind::FloatLiteral,
-                    })),
-                    Token {
+                body: vec![Node::Literal(Literal::Float(FloatLiteral {
+                    value: -1.0,
+                    token: Token {
                         start: 2,
                         len: 4,
-                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
-                    },
-                ))]
+                        syntax_kind: SyntaxKind::FloatLiteral,
+                    }
+                }))]
             }
         );
 
@@ -202,23 +202,14 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr::new(
-                    Token {
-                        start: 1,
-                        len: 1,
-                        syntax_kind: SyntaxKind::OperatorMinus,
-                    },
-                    Box::new(Node::Literal(Token {
-                        start: 2,
-                        len: 5,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
-                    Token {
+                body: vec![Node::Literal(Literal::Int(IntLiteral {
+                    value: -10234,
+                    token: Token {
                         start: 1,
                         len: 6,
-                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
-                    },
-                ))]
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                    }
+                }))]
             }
         );
 
@@ -226,23 +217,14 @@ mod tests {
         assert_eq!(
             ast,
             AST {
-                body: vec![Node::Unary(UnaryPrefixExpr::new(
-                    Token {
-                        start: 1,
-                        len: 1,
-                        syntax_kind: SyntaxKind::OperatorMinus,
-                    },
-                    Box::new(Node::Literal(Token {
-                        start: 4,
-                        len: 3,
-                        syntax_kind: SyntaxKind::HexadecimalLiteral,
-                    })),
-                    Token {
+                body: vec![Node::Literal(Literal::Int(IntLiteral {
+                    value: -291,
+                    token: Token {
                         start: 1,
                         len: 6,
-                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
-                    },
-                ))]
+                        syntax_kind: SyntaxKind::HexadecimalLiteral,
+                    }
+                }))]
             }
         );
     }

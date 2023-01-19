@@ -42,11 +42,11 @@ fn test_parse_string1() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 4,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 }
@@ -60,22 +60,22 @@ fn test_parse_string_with_spaces() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 17,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
     let (_, ast) = parse(r#"'word1 word2 word3'"#).unwrap();
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 17,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 }
@@ -89,22 +89,22 @@ fn test_parse_empty_string() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 0,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
     let (_, ast) = parse(r#"''"#).unwrap();
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 0,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 }
@@ -118,11 +118,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 16,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -130,11 +130,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 2,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -142,11 +142,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 3,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -154,11 +154,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 8,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -166,11 +166,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 2,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -178,11 +178,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 3,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 
@@ -190,11 +190,11 @@ fn test_parse_string_escaped() {
     assert_eq!(
         ast,
         AST {
-            body: vec![Node::Literal(Token {
+            body: vec![Node::Literal(Literal::String(Token {
                 start: 2,
                 len: 8,
                 syntax_kind: SyntaxKind::StringLiteral
-            })]
+            }))]
         }
     );
 }

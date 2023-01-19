@@ -4,14 +4,14 @@ use nom_locate::LocatedSpan;
 pub enum SyntaxKind {
     Identifier,
     IntegerLiteral,
-    FloatLiteral,
     HexadecimalLiteral,
+    FloatLiteral,
     StringLiteral,
-    ArrayElementSCR,
-    IndexedVariable,
-    LocalVariable,
-    GlobalVariable,
-    AdmaVariable,
+    ArrayElementSCR, // $var(0@,1i)
+    IndexedVariable, // var[1]
+    LocalVariable,   // 1@
+    GlobalVariable,  // $var
+    AdmaVariable,    // &var
     UnaryPrefixExpr,
     BinaryExpr,
     ConstDeclaration,
@@ -30,7 +30,7 @@ pub enum SyntaxKind {
     OperatorDiv,             // /
     OperatorEqual,           // =
     OperatorEqualEqual,      // ==
-    OperatorLessGreater,     // <>
+    OperatorNotEqual,        // <>
     OperatorBitwiseNotEqual, // ~=
     OperatorBitwiseAndEqual, // &=
     OperatorBitwiseOrEqual,  // |=
@@ -73,8 +73,8 @@ impl Token {
 
 #[derive(Debug, PartialEq)]
 pub enum Node {
-    /// Integer or Float literal
-    Literal(Token),
+    /// Number or string literal
+    Literal(Literal),
     /// Global or local variable or array element
     Variable(Variable),
     /// Binary expression
@@ -98,7 +98,11 @@ impl Node {
 
     pub fn as_token(&self) -> &Token {
         match self {
-            Node::Literal(e) => e,
+            Node::Literal(e) => match e {
+                Literal::Int(t) => &t.token,
+                Literal::Float(t) => &t.token,
+                Literal::String(t) => &t,
+            },
             Node::Unary(e) => &e.get_token(),
             Node::Variable(e) => match e {
                 Variable::Local(v) => &v.token,
@@ -116,15 +120,21 @@ impl Node {
         self.as_literal().is_some()
     }
 
-    pub fn as_literal(&self) -> Option<&Token> {
+    pub fn as_literal(&self) -> Option<&Literal> {
         match self {
-            Node::Literal(e) => Some(e),
-            Node::Unary(e) => e.get_operand().as_literal(),
+            Node::Literal(node) => Some(node),
             _ => None,
         }
     }
-    pub fn get_text<'a>(&self, s: &'a str) -> &'a str {
-        self.as_token().get_text(s)
+    pub fn get_text<'a>(&self, s: &'a str) -> String {
+        match self {
+            Node::Literal(e) => match e {
+                Literal::Int(t) => t.value.to_string(),
+                Literal::Float(t) => t.token.get_text(s).to_string(),
+                Literal::String(t) => t.get_text(s).to_string(),
+            },
+            _ => self.as_token().get_text(s).to_string(),
+        }
     }
 }
 
@@ -231,7 +241,7 @@ pub struct ArrayElementSCR {
     pub array_var: Box<Variable>,
     pub index_var: Box<Variable>,
     pub _type: VariableType,
-    pub len: Token,
+    pub len: IntLiteral,
     pub token: Token,
 }
 
@@ -265,6 +275,15 @@ impl SingleVariable {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum VariableType {
+    Unknown,
+    Int,         // i
+    Float,       // f
+    ShortString, // s
+    LongString,  // v
+}
+
+#[derive(Debug, PartialEq)]
 pub struct ConstDeclaration {
     pub items: Vec<ConstInitialization>,
     pub token: Token,
@@ -277,12 +296,43 @@ pub struct ConstInitialization {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum VariableType {
-    Unknown,
-    Int,         // i
-    Float,       // f
-    ShortString, // s
-    LongString,  // v
+pub enum Literal {
+    Int(IntLiteral),
+    Float(FloatLiteral),
+    String(Token),
+}
+
+impl Literal {
+    pub fn is_integer(&self) -> bool {
+        match self {
+            Literal::Int(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_float(&self) -> bool {
+        match self {
+            Literal::Float(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_string(&self) -> bool {
+        match self {
+            Literal::String(_) => true,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IntLiteral {
+    pub value: i32,
+    pub token: Token,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FloatLiteral {
+    pub value: f32,
+    pub token: Token,
 }
 
 #[derive(Debug, PartialEq)]

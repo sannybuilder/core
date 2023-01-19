@@ -417,9 +417,9 @@ mod tests {
             t!(
                 for game => (
                     //[global var: int] > [literal: int]
-                    "$2($3,1i) > 1" => "0018: $2($3,1i) 1",
+                    "$2($3,1i) > 0xA" => "0018: $2($3,1i) 10",
                     //[local var: int] > [literal: int]
-                    "0@(1@,1i) > 1" => "0019: 0@(1@,1i) 1",
+                    "0@(1@,1i) > -0x123" => "0019: 0@(1@,1i) -291",
                     //[literal: int] > [global var: int]
                     "1 > $2($3,1i)" => "001A: 1 $2($3,1i)",
                     //[literal: int] > [local var: int]
@@ -614,8 +614,10 @@ mod tests {
     fn test_not() {
         for game in [Game::gta3, Game::vc, Game::sa, Game::lcs, Game::sa_mobile] {
             t! {
+                // not <= :: >
                 for game => (
-                    "not 0@ <= 1" => "0019: 0@ 1"
+                    "not 0@ <= 1" => "0019: 0@ 1",
+                    "not 0@ <= 1.0" => "0021: 0@ 1.0"
                 )
             }
         }

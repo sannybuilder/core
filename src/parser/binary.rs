@@ -2,10 +2,10 @@ use nom::combinator::opt;
 use nom::combinator::{consumed, map};
 use nom::sequence::tuple;
 
-use crate::parser::whitespace::ws;
 use crate::parser::interface::*;
 use crate::parser::operator;
 use crate::parser::unary::unary;
+use crate::parser::whitespace::ws;
 
 fn map_binary(span: Span, left: Node, op: Option<(Token, Node)>) -> Node {
     match op {
@@ -148,11 +148,14 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 6,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 5,
+                        token: Token {
+                            start: 6,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 6,
@@ -185,11 +188,14 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 8,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 5,
+                        token: Token {
+                            start: 8,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 8,
@@ -223,11 +229,14 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 8,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 5,
+                        token: Token {
+                            start: 8,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 8,
@@ -261,11 +270,14 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 6,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 1,
+                        token: Token {
+                            start: 6,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 6,
@@ -275,7 +287,7 @@ mod tests {
             }
         );
 
-        // // $2 = 1 // (int)
+        // $2 = 1 // (int)
         let (_, ast) = parse("$2 = 1 // (int)").unwrap();
         assert_eq!(
             ast,
@@ -299,11 +311,14 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
-                        start: 6,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                    })),
+                    right: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 1,
+                        token: Token {
+                            start: 6,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 6,
@@ -339,11 +354,11 @@ mod tests {
                         len: 1,
                         syntax_kind: SyntaxKind::OperatorEqual
                     },
-                    right: Box::new(Node::Literal(Token {
+                    right: Box::new(Node::Literal(Literal::String(Token {
                         start: 8,
                         len: 4,
-                        syntax_kind: SyntaxKind::StringLiteral,
-                    })),
+                        syntax_kind: SyntaxKind::StringLiteral
+                    }))),
                     token: Token {
                         start: 1,
                         len: 12,
