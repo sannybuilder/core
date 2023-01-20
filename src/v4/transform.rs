@@ -160,12 +160,7 @@ fn transform_binary(
 ) -> Option<String> {
     macro_rules! binary {
         ($op:expr) => {
-            Some(format!(
-                "{} {} {}",
-                $op,
-                left.get_text(expr),
-                right.get_text(expr)
-            ))
+            format_binary($op, left.get_text(expr), right.get_text(expr))
         };
     }
     macro_rules! g {
@@ -615,6 +610,161 @@ fn transform_binary(
                 if literal.is_float() {
                     return binary!(g!(vcs: 0x0013; else 0x0023));
                 }
+            }
+        }
+
+        SyntaxKind::OperatorGreaterEqual if left.is_variable() && right.is_literal() => {
+            let left_var = left.as_variable()?;
+            let literal = right.as_literal()?;
+
+            if left_var.is_global() {
+                // var > int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x0015; else 0x0028));
+                }
+                // var > float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x0018; else 0x0030));
+                }
+            }
+            if left_var.is_local() {
+                // lvar > int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x0015; else 0x0029));
+                }
+                // lvar > float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x0018; else 0x0031));
+                }
+            }
+        }
+        SyntaxKind::OperatorGreaterEqual if left.is_literal() && right.is_variable() => {
+            let literal = left.as_literal()?;
+            let right_var = right.as_variable()?;
+
+            if right_var.is_global() {
+                // var > int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x0016; else 0x002A));
+                }
+                // var > float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x0019; else 0x0032));
+                }
+            }
+            if right_var.is_local() {
+                // lvar > int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x0016; else 0x002B));
+                }
+                // lvar > float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x0019; else 0x0033));
+                }
+            }
+        }
+        SyntaxKind::OperatorGreaterEqual if left.is_variable() && right.is_variable() => {
+            let left_var = left.as_variable()?;
+            let right_var = right.as_variable()?;
+
+            if left_var.is_global() && right_var.is_global() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x0017; else 0x002C));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001A; else 0x0034));
+                }
+            }
+
+            if left_var.is_local() && right_var.is_local() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x0017; else 0x002D));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001A; else 0x0035));
+                }
+            }
+
+            if left_var.is_global() && right_var.is_local() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x0017; else 0x002E));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001A; else 0x0036));
+                }
+            }
+
+            if left_var.is_local() && right_var.is_global() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x0017; else 0x002F));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001A; else 0x0037));
+                }
+            }
+        }
+
+        SyntaxKind::OperatorEqualEqual if left.is_variable() && right.is_literal() => {
+            let left_var = left.as_variable()?;
+            let literal = right.as_literal()?;
+
+            if left_var.is_global() {
+                // var == int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x001B; else 0x0038));
+                }
+                // var == float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x001D; else 0x0042));
+                }
+            }
+            if left_var.is_local() {
+                // lvar == int
+                if literal.is_integer() {
+                    return binary!(g!(vcs: 0x001B; else 0x0039));
+                }
+                // lvar == float
+                if literal.is_float() {
+                    return binary!(g!(vcs: 0x001D; else 0x0043));
+                }
+            }
+        }
+        SyntaxKind::OperatorEqualEqual if left.is_literal() && right.is_variable() => {
+            return transform_binary(right, left, op, game, expr, not);
+        }
+        SyntaxKind::OperatorEqualEqual if left.is_variable() && right.is_variable() => {
+            let left_var = left.as_variable()?;
+            let right_var = right.as_variable()?;
+
+            if left_var.is_global() && right_var.is_global() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x001C; else 0x003A));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001E; else 0x0044));
+                }
+            }
+
+            if left_var.is_local() && right_var.is_local() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x001C; else 0x003B));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001E; else 0x0045));
+                }
+            }
+
+            if left_var.is_global() && right_var.is_local() {
+                if left_var.is_integer() && right_var.is_integer() {
+                    return binary!(g!(vcs: 0x001C; else 0x003C));
+                }
+                if left_var.is_float() && right_var.is_float() {
+                    return binary!(g!(vcs: 0x001E; else 0x0046));
+                }
+            }
+
+            if left_var.is_local() && right_var.is_global() {
+                return transform_binary(right, left, op, game, expr, not);
             }
         }
         _ => {}
