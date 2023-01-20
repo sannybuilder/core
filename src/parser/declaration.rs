@@ -1,28 +1,27 @@
-use crate::parser::interface::*;
 use nom::bytes::complete::{tag, tag_no_case};
 use nom::combinator::map;
 use nom::multi::many1;
 use nom::sequence::{delimited, separated_pair};
 use nom::{branch::alt, combinator::consumed};
-use nom::{character::complete::multispace0, sequence::terminated};
 
 use crate::parser::expression;
-use crate::parser::helpers;
+use crate::parser::interface::*;
 use crate::parser::literal;
 use crate::parser::statement;
+use crate::parser::whitespace;
 
 pub fn declaration(s: Span) -> R<Node> {
-    terminated(alt((statement::statement, const_declaration)), multispace0)(s)
+    alt((statement::statement, const_declaration))(s)
 }
 
 pub fn const_declaration(s: Span) -> R<Node> {
     map(
         consumed(delimited(
-            helpers::line(tag_no_case("const")),
+            whitespace::line(tag_no_case("const")),
             map(
-                many1(helpers::line(consumed(separated_pair(
+                many1(whitespace::line(consumed(separated_pair(
                     literal::identifier,
-                    helpers::ws(tag("=")),
+                    whitespace::ws(tag("=")),
                     expression::expression,
                 )))),
                 |v: Vec<(Span, (Token, Node))>| {
@@ -35,7 +34,7 @@ pub fn const_declaration(s: Span) -> R<Node> {
                         .collect()
                 },
             ),
-            helpers::line(tag_no_case("end")),
+            whitespace::line(tag_no_case("end")),
         )),
         |(span, items)| {
             Node::ConstDeclaration(ConstDeclaration {
@@ -50,7 +49,7 @@ pub fn const_declaration(s: Span) -> R<Node> {
 mod tests {
     use super::*;
 
-    // #[test]
+    #[test]
     fn test_const_declaration() {
         let (_, node) = const_declaration(Span::from(
             r#"
@@ -70,11 +69,14 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Literal(Token {
-                            start: 9,
-                            len: 1,
-                            syntax_kind: SyntaxKind::IntegerLiteral
-                        })),
+                        value: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                            value: 1,
+                            token: Token {
+                                start: 9,
+                                len: 1,
+                                syntax_kind: SyntaxKind::IntegerLiteral
+                            }
+                        }))),
                         token: Token {
                             start: 5,
                             len: 5,
@@ -87,11 +89,14 @@ end"#,
                             len: 1,
                             syntax_kind: SyntaxKind::Identifier
                         },
-                        value: Box::new(Node::Literal(Token {
-                            start: 9,
-                            len: 3,
-                            syntax_kind: SyntaxKind::FloatLiteral
-                        })),
+                        value: Box::new(Node::Literal(Literal::Float(FloatLiteral {
+                            value: 2.0,
+                            token: Token {
+                                start: 9,
+                                len: 3,
+                                syntax_kind: SyntaxKind::FloatLiteral
+                            }
+                        }))),
                         token: Token {
                             start: 5,
                             len: 7,
@@ -106,5 +111,10 @@ end"#,
                 }
             })
         )
+    }
+
+    #[test]
+    fn test_const_declaration_inline() {
+        assert!(const_declaration(Span::from("const x = 1",)).is_err());
     }
 }

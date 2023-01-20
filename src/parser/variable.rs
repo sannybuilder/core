@@ -9,7 +9,6 @@ use nom::sequence::preceded;
 use nom::sequence::terminated;
 use nom::sequence::tuple;
 
-use crate::parser::helpers;
 use crate::parser::interface::*;
 use crate::parser::literal;
 
@@ -46,12 +45,12 @@ pub fn variable(s: Span) -> R<Variable> {
 }
 
 // $var($index,1i)
-fn array_element_scr(s: Span) -> R<(Variable, Token, VariableType)> {
+fn array_element_scr(s: Span) -> R<(Variable, IntLiteral, VariableType)> {
     delimited(
         char('('),
         tuple((
             terminated(single_variable, char(',')),
-            literal::decimal,
+            literal::integer,
             array_type,
         )),
         char(')'),
@@ -63,7 +62,7 @@ fn array_index(s: Span) -> R<Node> {
         char('['),
         alt((
             map(single_variable, |v| Node::Variable(v)),
-            map(literal::decimal, |d| Node::Literal(d)),
+            map(literal::integer, |d| Node::Literal(Literal::Int(d))),
         )),
         char(']'),
     )(s)
@@ -76,7 +75,7 @@ fn single_variable(s: Span) -> R<Variable> {
 fn local_var(s: Span) -> R<Variable> {
     map(
         consumed(tuple((
-            literal::decimal,
+            map(literal::integer, |d| d.token),
             preceded(char(LVAR_CHAR), variable_type),
         ))),
         |(span, (name, _type))| {
@@ -93,7 +92,7 @@ fn global_var(s: Span) -> R<Variable> {
     map(
         consumed(tuple((
             terminated(variable_type, char(GVAR_CHAR)),
-            alt((literal::decimal, literal::identifier_any)),
+            alt((map(literal::integer, |i| i.token), literal::identifier_any)),
         ))),
         |(span, (_type, name))| {
             Variable::Global(SingleVariable {
@@ -109,7 +108,7 @@ fn adma_var(s: Span) -> R<Variable> {
     map(
         consumed(tuple((
             terminated(variable_type, char(ADMA_CHAR)),
-            literal::decimal,
+            map(literal::integer, |i| i.token),
         ))),
         |(span, (_type, name))| {
             Variable::Adma(SingleVariable {
@@ -122,11 +121,21 @@ fn adma_var(s: Span) -> R<Variable> {
 }
 
 fn variable_type(s: Span) -> R<VariableType> {
-    map(opt(one_of("sv")), |c| helpers::char_to_type(c))(s)
+    map(opt(one_of("sv")), |c| char_to_type(c))(s)
 }
 
 fn array_type(s: Span) -> R<VariableType> {
-    map(opt(one_of("ifsv")), |c| helpers::char_to_type(c))(s)
+    map(opt(one_of("ifsv")), |c| char_to_type(c))(s)
+}
+
+fn char_to_type(c: Option<char>) -> VariableType {
+    match c {
+        Some('i') => VariableType::Int,
+        Some('f') => VariableType::Float,
+        Some('s') => VariableType::ShortString,
+        Some('v') => VariableType::LongString,
+        _ => VariableType::Unknown,
+    }
 }
 
 #[cfg(test)]
@@ -368,10 +377,13 @@ mod tests {
                         }
                     })),
                     _type: VariableType::Int,
-                    len: Token {
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                        start: 13,
-                        len: 2
+                    len: IntLiteral {
+                        value: 10,
+                        token: Token {
+                            start: 13,
+                            len: 2,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
                     },
                     token: Token {
                         syntax_kind: SyntaxKind::ArrayElementSCR,
@@ -417,10 +429,13 @@ mod tests {
                         }
                     })),
                     _type: VariableType::Float,
-                    len: Token {
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                        start: 7,
-                        len: 2
+                    len: IntLiteral {
+                        value: 10,
+                        token: Token {
+                            start: 7,
+                            len: 2,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
                     },
                     token: Token {
                         syntax_kind: SyntaxKind::ArrayElementSCR,
@@ -466,10 +481,13 @@ mod tests {
                         }
                     })),
                     _type: VariableType::ShortString,
-                    len: Token {
-                        syntax_kind: SyntaxKind::IntegerLiteral,
-                        start: 8,
-                        len: 2
+                    len: IntLiteral {
+                        value: 10,
+                        token: Token {
+                            start: 8,
+                            len: 2,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
                     },
                     token: Token {
                         syntax_kind: SyntaxKind::ArrayElementSCR,
@@ -501,11 +519,14 @@ mod tests {
                             syntax_kind: SyntaxKind::GlobalVariable
                         }
                     })),
-                    index: Box::new(Node::Literal(Token {
-                        start: 6,
-                        len: 1,
-                        syntax_kind: SyntaxKind::IntegerLiteral
-                    })),
+                    index: Box::new(Node::Literal(Literal::Int(IntLiteral {
+                        value: 1,
+                        token: Token {
+                            start: 6,
+                            len: 1,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    }))),
                     token: Token {
                         start: 1,
                         len: 7,
@@ -553,6 +574,58 @@ mod tests {
                         start: 1,
                         len: 8,
                         syntax_kind: SyntaxKind::IndexedVariable
+                    }
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables15() {
+        let (_, ast) = parse("$var($index,10)").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::ArrayElement(ArrayElementSCR {
+                    array_var: Box::new(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 2,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            len: 4,
+                            start: 1,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    })),
+                    index_var: Box::new(Variable::Global(SingleVariable {
+                        name: Token {
+                            start: 7,
+                            len: 5,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 6,
+                            len: 6,
+                            syntax_kind: SyntaxKind::GlobalVariable
+                        }
+                    })),
+                    _type: VariableType::Unknown,
+                    len: IntLiteral {
+                        value: 10,
+                        token: Token {
+                            start: 13,
+                            len: 2,
+                            syntax_kind: SyntaxKind::IntegerLiteral
+                        }
+                    },
+                    token: Token {
+                        syntax_kind: SyntaxKind::ArrayElementSCR,
+                        start: 1,
+                        len: 15,
                     }
                 }))]
             }
