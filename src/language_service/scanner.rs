@@ -209,16 +209,33 @@ pub fn find_constants<'a>(
                         continue;
                     }
                     if let Some(value) = tokens.next() {
-                        if let Some(_type) = get_type(value.trim(), &found_constants) {
-                            found_constants.push((
+                        let value = value.trim();
+                        match get_type(value) {
+                            Some(_type) => found_constants.push((
                                 name,
                                 SymbolInfoMap {
                                     line_number: line_number as u32,
                                     _type,
                                     file_name: file_name.clone(),
-                                    value: Some(String::from(value.trim())),
+                                    value: Some(String::from(value)),
                                 },
-                            ))
+                            )),
+                            None => {
+                                if let Some(constant) = found_constants
+                                    .iter()
+                                    .find(|x| x.0 == value.to_ascii_lowercase())
+                                {
+                                    found_constants.push((
+                                        name,
+                                        SymbolInfoMap {
+                                            line_number: line_number as u32,
+                                            _type: constant.1._type,
+                                            file_name: file_name.clone(),
+                                            value: constant.1.value.clone(),
+                                        },
+                                    ))
+                                };
+                            }
                         }
                     }
                 }
@@ -232,7 +249,7 @@ pub fn find_constants<'a>(
     Some(found_constants)
 }
 
-pub fn get_type(value: &str, found_constants: &Vec<(String, SymbolInfoMap)>) -> Option<SymbolType> {
+pub fn get_type(value: &str) -> Option<SymbolType> {
     if value.len() > 1 {
         if value.starts_with('$')
             || value.starts_with("v$")
@@ -259,12 +276,6 @@ pub fn get_type(value: &str, found_constants: &Vec<(String, SymbolInfoMap)>) -> 
     if value.starts_with("0x") || value.starts_with("-0x") || value.starts_with("+0x") {
         return Some(SymbolType::Number);
     }
-    if let Some(constant) = found_constants
-        .iter()
-        .find(|x| x.0 == value.to_ascii_lowercase())
-    {
-        return Some(constant.1._type);
-    };
     return None;
 }
 
