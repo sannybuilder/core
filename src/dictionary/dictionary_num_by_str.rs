@@ -87,24 +87,28 @@ mod tests {
     #[test]
     fn test_dictionary_num_by_str_find() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_num_by_str_new(
                 Duplicates::Replace.into(),
                 true,
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
             assert!(f.as_mut().is_some());
 
-            let loaded =
-                dictionary_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords-hex.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-hex.txt").unwrap();
+            let loaded = dictionary_num_by_str_load_file(f, file.as_ptr());
             assert!(loaded);
 
             let mut i = 0;
-            assert!(dictionary_num_by_str_find(f, pchar!("Wait"), &mut i));
+            let wait_keyword = std::ffi::CString::new("Wait").unwrap();
+            assert!(dictionary_num_by_str_find(f, wait_keyword.as_ptr(), &mut i));
             assert_eq!(i, 1);
             i = -1;
-            assert!(!dictionary_num_by_str_find(f, pchar!(""), &mut i));
+            let empty = std::ffi::CString::new("").unwrap();
+            assert!(!dictionary_num_by_str_find(f, empty.as_ptr(), &mut i));
             assert_eq!(i, -1);
         }
     }
@@ -112,11 +116,13 @@ mod tests {
     #[test]
     fn test_dictionary_num_by_str_duplicates_ignore() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_num_by_str_new(
                 Duplicates::Ignore.into(),
                 true,
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
             assert!(f.as_ref().is_some());
@@ -126,14 +132,16 @@ mod tests {
                 CaseFormat::LowerCase
             );
 
-            let loaded =
-                dictionary_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords-dups.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-dups.txt").unwrap();
+            let loaded = dictionary_num_by_str_load_file(f, file.as_ptr());
             assert!(loaded);
 
             let mut i = 0;
-            assert!(dictionary_num_by_str_find(f, pchar!("wait"), &mut i));
+            let wait = std::ffi::CString::new("wait").unwrap();
+            assert!(dictionary_num_by_str_find(f, wait.as_ptr(), &mut i));
             assert_eq!(i, 1);
-            assert!(dictionary_num_by_str_find(f, pchar!("jump"), &mut i));
+            let jump = std::ffi::CString::new("jump").unwrap();
+            assert!(dictionary_num_by_str_find(f, jump.as_ptr(), &mut i));
             assert_eq!(i, 1);
         }
     }
@@ -141,23 +149,27 @@ mod tests {
     #[test]
     fn test_dictionary_num_by_str_duplicates_replace() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_num_by_str_new(
                 Duplicates::Replace.into(),
                 true,
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
             assert!(f.as_ref().is_some());
 
-            let loaded =
-                dictionary_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords-dups.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-dups.txt").unwrap();
+            let loaded = dictionary_num_by_str_load_file(f, file.as_ptr());
             assert!(loaded);
 
             let mut i = 0;
-            assert!(dictionary_num_by_str_find(f, pchar!("wait"), &mut i));
+            let wait = std::ffi::CString::new("wait").unwrap();
+            assert!(dictionary_num_by_str_find(f, wait.as_ptr(), &mut i));
             assert_eq!(i, 1);
-            assert!(dictionary_num_by_str_find(f, pchar!("jump"), &mut i));
+            let jump = std::ffi::CString::new("jump").unwrap();
+            assert!(dictionary_num_by_str_find(f, jump.as_ptr(), &mut i));
             assert_eq!(i, 2);
         }
     }

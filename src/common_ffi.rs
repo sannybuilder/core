@@ -36,14 +36,6 @@ pub fn ptr_new<T>(o: T) -> *mut T {
     Box::into_raw(Box::new(o))
 }
 
-macro_rules! pchar {
-    ($name:expr) => {
-        {
-            let x = std::ffi::CString::new($name).unwrap();
-            x.as_ptr()
-        }
-    };
-}
 
 macro_rules! boolclosure {
     ($b:block) => {

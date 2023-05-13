@@ -20,8 +20,11 @@ impl UpdateService {
         let status_change = self.status_change;
         let game = params.to_string();
         std::thread::spawn(move || {
-            let decoded = get_file_gracefully(game, "version.txt").unwrap_or("".to_string());
-            (status_change)(pchar!(decoded));
+            let decoded = match get_file_gracefully(game, "version.txt") {
+                Ok(v) => std::ffi::CString::new(v).unwrap(),
+                Err(_) => std::ffi::CString::new("").unwrap(),
+            };
+            (status_change)(decoded.as_ptr());
         });
         Some(())
     }
@@ -38,8 +41,11 @@ impl UpdateService {
         }
         let status_change = self.status_change;
         std::thread::spawn(move || {
-            let result = auto_update(v).unwrap_or("".to_string());
-            (status_change)(pchar!(result.as_str()));
+            let result = match auto_update(v) {
+                Ok(v) => std::ffi::CString::new(v).unwrap(),
+                Err(_) => std::ffi::CString::new("").unwrap(),
+            };
+            (status_change)(result.as_ptr());
         });
         Some(())
     }
@@ -50,8 +56,11 @@ impl UpdateService {
             let status_change = self.status_change;
             let destination = x.next();
             std::thread::spawn(move || {
-                let result = download(game, destination).unwrap_or("".to_string());
-                (status_change)(pchar!(result.as_str()));
+                let result = match download(game, destination) {
+                    Ok(v) => std::ffi::CString::new(v).unwrap(),
+                    Err(_) => std::ffi::CString::new("").unwrap(),
+                };
+                (status_change)(result.as_ptr());
             });
         } else {
             return None;
