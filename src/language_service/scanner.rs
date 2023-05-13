@@ -156,7 +156,7 @@ pub fn find_constants<'a>(
     source: &Source,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let mut lines = content.lines().enumerate();
-    let mut res = vec![];
+    let mut found_constants = vec![];
     let mut inside_const = false;
     let file_name = match source {
         Source::File(path) => Some(path.clone()),
@@ -181,7 +181,7 @@ pub fn find_constants<'a>(
                     // inline variable declaration
                     let name = words.next().unwrap_or("");
                     if !name.is_empty() {
-                        res.push((
+                        found_constants.push((
                             name.to_ascii_lowercase(),
                             SymbolInfoMap {
                                 line_number: line_number as u32,
@@ -199,10 +199,19 @@ pub fn find_constants<'a>(
                 let mut tokens = line.split('=');
 
                 if let Some(name) = tokens.next() {
+                    let name = name.trim().to_ascii_lowercase();
+                    if found_constants.iter().any(|(n, _)| n == &name) {
+                        log::debug!(
+                            "Found duplicate const declaration {} in line {}",
+                            name,
+                            line_number
+                        );
+                        continue;
+                    }
                     if let Some(value) = tokens.next() {
-                        if let Some(_type) = get_type(value.trim()) {
-                            res.push((
-                                name.trim().to_ascii_lowercase(),
+                        if let Some(_type) = get_type(value.trim(), &found_constants) {
+                            found_constants.push((
+                                name,
                                 SymbolInfoMap {
                                     line_number: line_number as u32,
                                     _type,
@@ -220,10 +229,10 @@ pub fn find_constants<'a>(
         }
     }
 
-    Some(res)
+    Some(found_constants)
 }
 
-pub fn get_type(value: &str) -> Option<SymbolType> {
+pub fn get_type(value: &str, found_constants: &Vec<(String, SymbolInfoMap)>) -> Option<SymbolType> {
     if value.len() > 1 {
         if value.starts_with('$')
             || value.starts_with("v$")
@@ -250,6 +259,12 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
     if value.starts_with("0x") || value.starts_with("-0x") || value.starts_with("+0x") {
         return Some(SymbolType::Number);
     }
+    if let Some(constant) = found_constants
+        .iter()
+        .find(|x| x.0 == value.to_ascii_lowercase())
+    {
+        return Some(constant.1._type);
+    };
     return None;
 }
 
