@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "sanny_builder_core"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "base64",
  "ctor",

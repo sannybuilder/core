@@ -14,6 +14,7 @@ pub mod parser;
 pub mod sdk;
 pub mod update_service;
 pub mod utils;
+pub mod legacy_ini;
 
 #[ctor]
 fn main() {
