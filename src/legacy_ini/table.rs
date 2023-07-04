@@ -1,7 +1,7 @@
 use nom::branch::alt;
-use nom::bytes::complete::{is_not, tag_no_case};
+use nom::bytes::complete::{is_not, tag, tag_no_case};
 use nom::character::complete::{alpha1, char};
-use nom::combinator::rest;
+use nom::combinator::{not, rest};
 use nom::multi::many0;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::{
@@ -12,6 +12,7 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 use std::collections::HashMap;
+use std::ffi::CString;
 
 type Span<'a> = LocatedSpan<&'a str>;
 type R<'a, T> = IResult<Span<'a>, T>;
@@ -20,7 +21,7 @@ type R<'a, T> = IResult<Span<'a>, T>;
 pub struct Opcode {
     num_params: i8,
     params: HashMap<usize, Param>,
-    words: HashMap<usize, String>,
+    words: HashMap<usize, CString>,
 }
 
 #[derive(Debug)]
@@ -72,7 +73,7 @@ impl From<u8> for Game {
 #[derive(Debug, Default)]
 pub struct OpcodeTable {
     opcodes: HashMap<u16, Opcode>,
-    files: Vec<std::path::PathBuf>,
+    files: Vec<String>,
     date: Option<String>,
     publisher: Option<String>,
     max_opcode: u16,
@@ -89,10 +90,11 @@ pub enum Line {
     Date(String),
     Publisher(String),
     Opcode(u16, Opcode),
+    Section(String),
 }
 
 pub fn line_parser(s: &str) -> R<Line> {
-    alt((date_line, publisher_line, opcode_line))(Span::from(s))
+    alt((date_line, publisher_line, opcode_line, section_line))(Span::from(s))
 }
 
 pub fn date_line(s: Span) -> R<Line> {
@@ -109,6 +111,13 @@ pub fn publisher_line(s: Span) -> R<Line> {
     )(s)
 }
 
+pub fn section_line(s: Span) -> R<Line> {
+    map(
+        delimited(char('['), is_not("]"), char(']')),
+        |s: LocatedSpan<&str>| Line::Section(s.to_string()),
+    )(s)
+}
+
 pub fn opcode_line(s: Span) -> R<Line> {
     map(
         tuple((
@@ -117,9 +126,9 @@ pub fn opcode_line(s: Span) -> R<Line> {
             many0(token),
         )),
         |(id, num_params, tokens)| {
-            let mut index = 0;
+            let mut index: usize = 0;
             let mut params = HashMap::new();
-            let mut words = HashMap::new();
+            let mut words: HashMap<usize, CString> = HashMap::new();
 
             for tok in tokens {
                 match tok {
@@ -128,13 +137,21 @@ pub fn opcode_line(s: Span) -> R<Line> {
                         index += 1
                     }
                     Token::Word(w) => {
-                        words.insert(index, w);
+                        words.insert(index, CString::new(w).unwrap());
                     }
                 }
             }
 
             if words.is_empty() {
-                words.insert(0, String::from("(unknown)"));
+                words.insert(0, CString::new("(unknown) ").unwrap());
+            }
+
+            if params.len() < num_params as usize {
+                for i in params.len().max(1) as i8..num_params {
+                    // log::debug!("{id} Adding empty words");
+                    log::debug!("{id} Adding empty param {}", i);
+                    words.insert(i as usize, CString::new(" ").unwrap());
+                }
             }
 
             Line::Opcode(
@@ -150,13 +167,17 @@ pub fn opcode_line(s: Span) -> R<Line> {
 }
 
 fn token(s: Span) -> R<Token> {
-    alt((word, param))(s)
+    alt((param, bool_param, word))(s)
 }
 
 fn word(s: Span) -> R<Token> {
-    map(is_not("%"), |s: LocatedSpan<&str>| {
-        Token::Word(s.to_string())
-    })(s)
+    map(
+        recognize(tuple((
+            is_not("%"),
+            opt(tuple((char('%'), not(digit1), opt(is_not("%"))))),
+        ))),
+        |s: LocatedSpan<&str>| Token::Word(s.to_string()),
+    )(s)
 }
 
 fn param(s: Span) -> R<Token> {
@@ -175,6 +196,18 @@ fn param(s: Span) -> R<Token> {
                     "k" => ParamType::Byte128, // only sa
                     _ => ParamType::Any,
                 },
+            })
+        },
+    )(s)
+}
+
+fn bool_param(s: Span) -> R<Token> {
+    map(
+        delimited(char('%'), terminated(digit1, tag("b")), is_not(" ")),
+        |d: LocatedSpan<&str>| {
+            Token::Param(Param {
+                real_index: u8::from_str_radix(*d, 10).unwrap() - 1,
+                param_type: ParamType::Any,
             })
         },
     )(s)
@@ -212,20 +245,16 @@ impl OpcodeTable {
         self.opcodes.insert(id, opcode);
     }
 
-    pub fn load_from_file<P>(&mut self, file_name: P)
-    where
-        P: AsRef<std::path::Path>,
-    {
-        let p = file_name.as_ref().to_path_buf();
-        if self.files.contains(&p) {
-            log::debug!("File {} already loaded", file_name.as_ref().display());
-            return;
+    pub fn load_from_file(&mut self, file_name: &str) -> bool {
+        if self.files.iter().any(|f| f.eq_ignore_ascii_case(file_name)) {
+            return false;
         }
-        self.files.push(p);
+        self.files.push(file_name.to_string());
         let content = std::fs::read_to_string(file_name).unwrap();
         for line in content.lines() {
             self.parse_line(line);
         }
+        return true;
     }
 
     pub fn parse_line(&mut self, line: &str) {
@@ -238,6 +267,14 @@ impl OpcodeTable {
         }
         match line_parser(&line) {
             Ok((_, Line::Opcode(id, opcode))) => {
+                if opcode.num_params > 0 && opcode.params.len() as i8 != opcode.num_params {
+                    log::error!(
+                        "Invalid number of params for opcode {:04X}: expected {}, found {}",
+                        id,
+                        opcode.num_params,
+                        opcode.params.len()
+                    );
+                }
                 self.add_opcode(id, opcode);
             }
             Ok((_, Line::Date(date))) => {
@@ -245,6 +282,9 @@ impl OpcodeTable {
             }
             Ok((_, Line::Publisher(publisher))) => {
                 self.publisher = Some(publisher);
+            }
+            Ok((_, Line::Section(_))) => {
+                // ignore section
             }
             Err(e) => {
                 log::error!("{e}");
@@ -292,10 +332,9 @@ impl OpcodeTable {
         self.get_word(id, index).is_some()
     }
 
-    pub fn get_word(&self, id: u16, index: usize) -> Option<&str> {
+    pub fn get_word(&self, id: u16, index: usize) -> Option<&CString> {
         self.get_opcode(id)
             .and_then(|opcode| opcode.words.get(&index))
-            .map(|x| x.as_str())
     }
 
     pub fn get_max_opcode(&self) -> u16 {
@@ -345,7 +384,10 @@ mod tests {
         assert_eq!(opcode_table.get_params_count(id), 0);
         assert!(opcode_table.does_word_exist(id, 0));
         assert_eq!(opcode_table.does_word_exist(id, 1), false);
-        assert_eq!(opcode_table.get_word(id, 0), Some("NOP"));
+        assert_eq!(
+            opcode_table.get_word(id, 0),
+            Some(&CString::new("NOP").unwrap())
+        );
     }
 
     #[test]
@@ -357,8 +399,14 @@ mod tests {
         assert_eq!(opcode_table.get_params_count(id), 1);
         assert!(opcode_table.does_word_exist(id, 0));
         assert!(opcode_table.does_word_exist(id, 1));
-        assert_eq!(opcode_table.get_word(id, 0), Some("wait "));
-        assert_eq!(opcode_table.get_word(id, 1), Some(" ms"));
+        assert_eq!(
+            opcode_table.get_word(id, 0),
+            Some(&CString::new("wait ").unwrap())
+        );
+        assert_eq!(
+            opcode_table.get_word(id, 1),
+            Some(&CString::new(" ms").unwrap())
+        );
     }
 
     #[test]
@@ -369,14 +417,17 @@ mod tests {
 
         assert_eq!(opcode_table.get_params_count(id), 35);
         assert!(opcode_table.does_word_exist(id, 0));
-        assert_eq!(opcode_table.get_word(id, 0), Some("start_new_script "));
+        assert_eq!(
+            opcode_table.get_word(id, 0),
+            Some(&CString::new("start_new_script ").unwrap())
+        );
     }
 
     #[test]
     fn test_real_index() {
         let mut opcode_table = OpcodeTable::new(Game::SA);
         opcode_table.parse_line("0053=5,%5d% = create_player %1d% at %2d% %3d% %4d%");
-        
+
         let id = 0x0053;
         assert_eq!(opcode_table.get_params_count(id), 5);
         assert_eq!(opcode_table.get_param_real_index(id, 0), 4);
@@ -384,5 +435,50 @@ mod tests {
         assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
         assert_eq!(opcode_table.get_param_real_index(id, 3), 2);
         assert_eq!(opcode_table.get_param_real_index(id, 4), 3);
+    }
+
+    #[test]
+    fn test_bool_param() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+        opcode_table.parse_line(
+            "00E3=6,  player %1d% %6b:in-sphere/%near_point %2d% %3d% radius %4d% %5d%",
+        );
+
+        let id = 0x00E3;
+        assert_eq!(opcode_table.get_params_count(id), 6);
+        assert_eq!(opcode_table.get_param_real_index(id, 0), 0);
+        assert_eq!(opcode_table.get_param_real_index(id, 1), 5);
+        assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
+        assert_eq!(opcode_table.get_param_real_index(id, 3), 2);
+        assert_eq!(opcode_table.get_param_real_index(id, 4), 3);
+        assert_eq!(opcode_table.get_param_real_index(id, 5), 4);
+    }
+
+    #[test]
+    fn test_percentage() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+        opcode_table.parse_line("0B1B=2,%1d% %= %2d%");
+        let id = 0x0B1B;
+
+        assert_eq!(opcode_table.get_params_count(id), 2);
+        assert!(opcode_table.does_word_exist(id, 1));
+        assert_eq!(
+            opcode_table.get_word(id, 1),
+            Some(&CString::new(" %= ").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_percentage2() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+        opcode_table.parse_line("0B1B=1,%1d% 100%");
+        let id = 0x0B1B;
+
+        assert_eq!(opcode_table.get_params_count(id), 1);
+        assert!(opcode_table.does_word_exist(id, 1));
+        assert_eq!(
+            opcode_table.get_word(id, 1),
+            Some(&CString::new(" 100%").unwrap())
+        );
     }
 }

@@ -20,12 +20,15 @@ pub unsafe extern "C" fn legacy_ini_load_file(table: *mut OpcodeTable, path: PCh
     boolclosure!({
         {
             let path = pchar_to_str(path)?;
-            (*table).load_from_file(path);
-            log::debug!(
-                "File {path} loaded. Max opcode: {:04X}, Count: {}",
-                (*table).get_max_opcode(),
-                (*table).len()
-            );
+            if (*table).load_from_file(path) {
+                log::debug!(
+                    "File {path} loaded. Max opcode: {:04X}, Count: {}",
+                    (*table).get_max_opcode(),
+                    (*table).len()
+                )
+            } else {
+                log::debug!("File {path} already loaded");
+            }
             Some(())
         }
     })
@@ -77,7 +80,7 @@ pub unsafe extern "C" fn legacy_ini_get_word(
 ) -> bool {
     boolclosure! {{
         let word = (*table).get_word(opcode, index as _)?;
-        *out = CString::into_raw(CString::new(word).unwrap());
+        *out = word.as_ptr();
         Some(())
     }}
 }
@@ -112,6 +115,9 @@ pub unsafe extern "C" fn legacy_ini_get_date(table: *mut OpcodeTable, out: *mut 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn legacy_ini_is_variadic_opcode(table: *mut OpcodeTable, opcode: u16) -> bool {
+pub unsafe extern "C" fn legacy_ini_is_variadic_opcode(
+    table: *mut OpcodeTable,
+    opcode: u16,
+) -> bool {
     (*table).is_variadic_opcode(opcode)
 }
