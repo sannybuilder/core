@@ -481,4 +481,18 @@ mod tests {
             Some(&CString::new(" 100%").unwrap())
         );
     }
+
+    #[test]
+    fn test_unary_() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+        opcode_table.parse_line("0B1A=1,~%1d%");
+        let id = 0x0B1A;
+
+        assert_eq!(opcode_table.get_params_count(id), 1);
+        assert!(opcode_table.does_word_exist(id, 0));
+        assert_eq!(
+            opcode_table.get_word(id, 0),
+            Some(&CString::new("~").unwrap())
+        );
+    }
 }
