@@ -1,5 +1,9 @@
 use super::helpers::*;
-use crate::parser::interface::{Node, SyntaxKind, AST};
+use crate::{
+    legacy_ini::OpcodeTable,
+    namespaces::namespaces::Namespaces,
+    parser::interface::{Node, SyntaxKind, AST},
+};
 
 static OP_AND: &'static str = "BIT_AND";
 static OP_OR: &'static str = "BIT_OR";
@@ -27,14 +31,21 @@ static OP_INT_SUB: &'static str = "INT_SUB";
 static OP_INT_MUL: &'static str = "INT_MUL";
 static OP_INT_DIV: &'static str = "INT_DIV";
 
-pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
+pub fn try_tranform(
+    ast: &AST,
+    expr: &str,
+    ns: &Namespaces,
+    legacy_ini: &OpcodeTable,
+) -> Option<String> {
     let e = ast.body.get(0)?;
 
     match e {
         Node::Unary(e) => {
             if e.get_operator() == &SyntaxKind::OperatorBitwiseNot {
                 if is_variable(&e.operand) {
-                    return format_unary(OP_NOT_UNARY, token_str(expr, as_token(&e.operand)?));
+                    // ~var
+                    let op_id = *ns.get_opcode_by_command_name(OP_NOT_UNARY)?;
+                    return format_unary(op_id, token_str(expr, as_token(&e.operand)?));
                 }
             }
         }
@@ -46,7 +57,7 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
                 return None;
             }
 
-            let left_token = as_token(&left)?;
+            let dest_var_token = as_token(&left)?;
 
             match right.as_ref() {
                 Node::Unary(unary)
@@ -55,91 +66,102 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
                 {
                     // var = ~var
                     return format_binary(
-                        OP_NOT,
-                        token_str(expr, left_token),
+                        *ns.get_opcode_by_command_name(OP_NOT)?,
+                        token_str(expr, dest_var_token),
                         token_str(expr, as_token(&unary.operand)?),
+                        legacy_ini,
                     );
                 }
                 Node::Binary(binary_expr) => match binary_expr.get_operator() {
                     SyntaxKind::OperatorBitwiseAnd => {
                         return format_ternary(
-                            OP_AND,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_AND)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorBitwiseOr => {
                         return format_ternary(
-                            OP_OR,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_OR)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorBitwiseXor => {
                         return format_ternary(
-                            OP_XOR,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_XOR)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorBitwiseMod => {
                         return format_ternary(
-                            OP_MOD,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_MOD)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorBitwiseShr => {
                         return format_ternary(
-                            OP_SHR,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_SHR)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorBitwiseShl => {
                         return format_ternary(
-                            OP_SHL,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_SHL)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorPlus => {
                         return format_ternary(
-                            OP_INT_ADD,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_INT_ADD)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorMinus => {
                         return format_ternary(
-                            OP_INT_SUB,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_INT_SUB)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorMul => {
                         return format_ternary(
-                            OP_INT_MUL,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_INT_MUL)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     SyntaxKind::OperatorDiv => {
                         return format_ternary(
-                            OP_INT_DIV,
-                            token_str(expr, left_token),
+                            *ns.get_opcode_by_command_name(OP_INT_DIV)?,
+                            token_str(expr, dest_var_token),
                             token_str(expr, as_token(&binary_expr.left)?),
                             token_str(expr, as_token(&binary_expr.right)?),
-                        )
+                            legacy_ini,
+                        );
                     }
                     _ => return None,
                 },
@@ -147,79 +169,79 @@ pub fn try_tranform(ast: &AST, expr: &str) -> Option<String> {
                     let right_token = as_token(&right)?;
                     match e.get_operator() {
                         SyntaxKind::OperatorBitwiseAndEqual => {
-                            return format_binary(
-                                OP_AND_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_AND_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorBitwiseOrEqual => {
-                            return format_binary(
-                                OP_OR_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_OR_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorBitwiseXorEqual => {
-                            return format_binary(
-                                OP_XOR_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_XOR_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorBitwiseModEqual => {
-                            return format_binary(
-                                OP_MOD_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_MOD_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorBitwiseShrEqual => {
-                            return format_binary(
-                                OP_SHR_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_SHR_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorBitwiseShlEqual => {
-                            return format_binary(
-                                OP_SHL_COMPOUND,
-                                token_str(expr, left_token),
+                            return format_binary_no_reorder(
+                                *ns.get_opcode_by_command_name(OP_SHL_COMPOUND)?,
+                                token_str(expr, dest_var_token),
                                 token_str(expr, right_token),
-                            )
+                            );
                         }
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(left)?;
                             match right_token.syntax_kind {
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
                                     // var = int
-                                    return format_binary(
-                                        OP_SET_VAR_INT,
-                                        token_str(expr, left_token),
+                                    return format_binary_no_reorder(
+                                        *ns.get_opcode_by_command_name(OP_SET_VAR_INT)?,
+                                        token_str(expr, dest_var_token),
                                         token_str(expr, right_token),
                                     );
                                 }
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
                                     // var = float
-                                    return format_binary(
-                                        OP_SET_VAR_FLOAT,
-                                        token_str(expr, left_token),
+                                    return format_binary_no_reorder(
+                                        *ns.get_opcode_by_command_name(OP_SET_VAR_FLOAT)?,
+                                        token_str(expr, dest_var_token),
                                         token_str(expr, right_token),
                                     );
                                 }
                                 SyntaxKind::IntegerLiteral if left_var.is_local() => {
                                     // lvar = int
-                                    return format_binary(
-                                        OP_SET_LVAR_INT,
-                                        token_str(expr, left_token),
+                                    return format_binary_no_reorder(
+                                        *ns.get_opcode_by_command_name(OP_SET_LVAR_INT)?,
+                                        token_str(expr, dest_var_token),
                                         token_str(expr, right_token),
                                     );
                                 }
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
                                     // lvar = float
-                                    return format_binary(
-                                        OP_SET_LVAR_FLOAT,
-                                        token_str(expr, left_token),
+                                    return format_binary_no_reorder(
+                                        *ns.get_opcode_by_command_name(OP_SET_LVAR_FLOAT)?,
+                                        token_str(expr, dest_var_token),
                                         token_str(expr, right_token),
                                     );
                                 }

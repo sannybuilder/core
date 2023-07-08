@@ -1,141 +1,174 @@
+use crate::{legacy_ini::OpcodeTable, namespaces::namespaces::Namespaces};
+
 pub mod ffi;
 pub mod helpers;
 pub mod transform;
 
-pub fn transform(expr: &str) -> Option<String> {
+pub fn transform(expr: &str, ns: &Namespaces, legacy_ini: &OpcodeTable) -> Option<String> {
     let body = crate::parser::parse(expr).ok()?.1;
-    transform::try_tranform(&body, expr)
+    transform::try_tranform(&body, expr, ns, legacy_ini)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::legacy_ini::Game;
+
     use super::*;
     #[test]
     fn test_command_unary() {
-        assert_eq!(transform("~0@"), Some(String::from("BIT_NOT_COMPOUND 0@")));
+        let mut table = OpcodeTable::new(Game::SA);
+        table.load_from_file("SASCM.ini");
+        let mut ns = Namespaces::new();
+        ns.load_library("sa.json");
+
         assert_eq!(
-            transform("~$var"),
-            Some(String::from("BIT_NOT_COMPOUND $var"))
+            transform("~0@", &ns, &table),
+            Some(String::from("0B1A: 0@"))
         );
         assert_eq!(
-            transform("~&10"),
-            Some(String::from("BIT_NOT_COMPOUND &10"))
+            transform("~$var", &ns, &table),
+            Some(String::from("0B1A: $var"))
         );
         assert_eq!(
-            transform("~10@($_,1i)"),
-            Some(String::from("BIT_NOT_COMPOUND 10@($_,1i)"))
+            transform("~&10", &ns, &table),
+            Some(String::from("0B1A: &10"))
         );
         assert_eq!(
-            transform("~$0101(1000@,12f)"),
-            Some(String::from("BIT_NOT_COMPOUND $0101(1000@,12f)"))
+            transform("~10@($_,1i)", &ns, &table),
+            Some(String::from("0B1A: 10@($_,1i)"))
+        );
+        assert_eq!(
+            transform("~$0101(1000@,12f)", &ns, &table),
+            Some(String::from("0B1A: $0101(1000@,12f)"))
         );
     }
 
     #[test]
     fn test_command_binary() {
+        let mut table = OpcodeTable::new(Game::SA);
+        table.load_from_file("SASCM.ini");
+        let mut ns = Namespaces::new();
+        ns.load_library("sa.json");
+
         assert_eq!(
-            transform("0@ &= 1@"),
-            Some(String::from("BIT_AND_COMPOUND 0@ 1@"))
+            transform("0@ &= 1@", &ns, &table),
+            Some(String::from("0B17: 0@ 1@"))
         );
         assert_eq!(
-            transform("0@ &= 100"),
-            Some(String::from("BIT_AND_COMPOUND 0@ 100"))
+            transform("0@ &= 100", &ns, &table),
+            Some(String::from("0B17: 0@ 100"))
         );
         assert_eq!(
-            transform("0@ &= 42.01"),
-            Some(String::from("BIT_AND_COMPOUND 0@ 42.01"))
+            transform("0@ &= 42.01", &ns, &table),
+            Some(String::from("0B17: 0@ 42.01"))
         );
         assert_eq!(
-            transform("0@ &= -1"),
-            Some(String::from("BIT_AND_COMPOUND 0@ -1"))
+            transform("0@ &= -1", &ns, &table),
+            Some(String::from("0B17: 0@ -1"))
         );
         assert_eq!(
-            transform("0@ |= 1@"),
-            Some(String::from("BIT_OR_COMPOUND 0@ 1@"))
+            transform("0@ |= 1@", &ns, &table),
+            Some(String::from("0B18: 0@ 1@"))
         );
         assert_eq!(
-            transform("0@ ^= 1@"),
-            Some(String::from("BIT_XOR_COMPOUND 0@ 1@"))
+            transform("0@ ^= 1@", &ns, &table),
+            Some(String::from("0B19: 0@ 1@"))
         );
         assert_eq!(
-            transform("0@ %= 1@"),
-            Some(String::from("MOD_COMPOUND 0@ 1@"))
+            transform("0@ %= 1@", &ns, &table),
+            Some(String::from("0B1B: 0@ 1@"))
         );
         assert_eq!(
-            transform("0@ >>= 1@"),
-            Some(String::from("BIT_SHR_COMPOUND 0@ 1@"))
+            transform("0@ >>= 1@", &ns, &table),
+            Some(String::from("0B1C: 0@ 1@"))
         );
         assert_eq!(
-            transform("0@ <<= 1@"),
-            Some(String::from("BIT_SHL_COMPOUND 0@ 1@"))
+            transform("0@ <<= 1@", &ns, &table),
+            Some(String::from("0B1D: 0@ 1@"))
         );
         assert_eq!(
-            transform("&101 <<= &123"),
-            Some(String::from("BIT_SHL_COMPOUND &101 &123"))
+            transform("&101 <<= &123", &ns, &table),
+            Some(String::from("0B1D: &101 &123"))
         );
         assert_eq!(
-            transform("$var = 5"),
-            Some(String::from("SET_VAR_INT $var 5"))
+            transform("$var = 5", &ns, &table),
+            Some(String::from("0004: $var 5"))
         );
         assert_eq!(
-            transform("&100 = 5"),
-            Some(String::from("SET_VAR_INT &100 5"))
-        );
-        assert_eq!(transform("0@ = 0"), Some(String::from("SET_LVAR_INT 0@ 0")));
-        assert_eq!(
-            transform("$var[10] = 5.0"),
-            Some(String::from("SET_VAR_FLOAT $var[10] 5.0"))
+            transform("&100 = 5", &ns, &table),
+            Some(String::from("0004: &100 5"))
         );
         assert_eq!(
-            transform("0@(1@,1i) = 0.0"),
-            Some(String::from("SET_LVAR_FLOAT 0@(1@,1i) 0.0"))
+            transform("0@ = 0", &ns, &table),
+            Some(String::from("0006: 0@ 0"))
+        );
+        assert_eq!(
+            transform("$var[10] = 5.0", &ns, &table),
+            Some(String::from("0005: $var[10] 5.0"))
+        );
+        assert_eq!(
+            transform("0@(1@,1i) = 0.0", &ns, &table),
+            Some(String::from("0007: 0@(1@,1i) 0.0"))
         );
     }
 
     #[test]
     fn test_ternary() {
+        let mut table = OpcodeTable::new(Game::SA);
+        table.load_from_file("SASCM.ini");
+        let mut ns = Namespaces::new();
+        ns.load_library("sa.json");
+
         assert_eq!(
-            transform("0@ = -1 & 1@"),
-            Some(String::from("BIT_AND 0@ -1 1@"))
+            transform("0@ = -1 & 1@", &ns, &table),
+            Some(String::from("0B10: 0@ -1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 | 1@"),
-            Some(String::from("BIT_OR 0@ 1 1@"))
+            transform("0@ = 1 | 1@", &ns, &table),
+            Some(String::from("0B11: 0@ 1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 ^ 1@"),
-            Some(String::from("BIT_XOR 0@ 1 1@"))
-        );
-        assert_eq!(transform("0@ = 1 % 1@"), Some(String::from("MOD 0@ 1 1@")));
-        assert_eq!(
-            transform("0@ = 1 >> 1@"),
-            Some(String::from("BIT_SHR 0@ 1 1@"))
+            transform("0@ = 1 ^ 1@", &ns, &table),
+            Some(String::from("0B12: 0@ 1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 << 1@"),
-            Some(String::from("BIT_SHL 0@ 1 1@"))
+            transform("0@ = 1 % 1@", &ns, &table),
+            Some(String::from("0B14: 0@ 1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 + 2"),
-            Some(String::from("INT_ADD 0@ 1 2"))
+            transform("0@ = 1 >> 1@", &ns, &table),
+            Some(String::from("0B15: 0@ 1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 - 2"),
-            Some(String::from("INT_SUB 0@ 1 2"))
+            transform("0@ = 1 << 1@", &ns, &table),
+            Some(String::from("0B16: 0@ 1 1@"))
         );
         assert_eq!(
-            transform("0@ = 1 * 2"),
-            Some(String::from("INT_MUL 0@ 1 2"))
+            transform("0@ = 1 + 2", &ns, &table),
+            Some(String::from("0A8E: 0@ 1 2"))
         );
         assert_eq!(
-            transform("0@ = 1 / 2"),
-            Some(String::from("INT_DIV 0@ 1 2"))
+            transform("0@ = 1 - 2", &ns, &table),
+            Some(String::from("0A8F: 0@ 1 2"))
+        );
+        assert_eq!(
+            transform("0@ = 1 * 2", &ns, &table),
+            Some(String::from("0A90: 0@ 1 2"))
+        );
+        assert_eq!(
+            transform("0@ = 1 / 2", &ns, &table),
+            Some(String::from("0A91: 0@ 1 2"))
         );
     }
 
     #[test]
     fn test_not() {
-        assert_eq!(transform("0@ = ~1@"), Some(String::from("BIT_NOT 0@ 1@")));
-        assert_eq!(transform("~0@"), Some(String::from("BIT_NOT_COMPOUND 0@")));
+        let mut table = OpcodeTable::new(Game::SA);
+        table.load_from_file("SASCM.ini");
+        let mut ns = Namespaces::new();
+        ns.load_library("sa.json");
+
+        assert_eq!(transform("0@ = ~1@", &ns, &table), Some(String::from("0B13: 0@ 1@")));
+        assert_eq!(transform("~0@", &ns, &table), Some(String::from("0B1A: 0@")));
     }
 }
