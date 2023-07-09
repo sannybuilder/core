@@ -9,11 +9,18 @@ pub fn pchar_to_string<'a>(s: PChar) -> Option<String> {
     }
 }
 
+// TODO: this function fails if the string is not ASCII
 pub fn pchar_to_str<'a>(s: PChar) -> Option<&'a str> {
     if s.is_null() {
         None
     } else {
-        unsafe { Some(std::ffi::CStr::from_ptr(s).to_str().ok()?) }
+        match unsafe { std::ffi::CStr::from_ptr(s).to_str() } {
+            Ok(s) => Some(s),
+            Err(e) => {
+                log::error!("Error converting C string to Rust string: {e}");
+                None
+            }
+        }
     }
 }
 
@@ -35,7 +42,6 @@ pub unsafe fn ptr_free<T>(ptr: *mut T) {
 pub fn ptr_new<T>(o: T) -> *mut T {
     Box::into_raw(Box::new(o))
 }
-
 
 macro_rules! boolclosure {
     ($b:block) => {

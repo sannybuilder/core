@@ -38,9 +38,9 @@ pub enum ParamType {
     Pointer = 3,
     AnyModel = 4,
     ScriptId = 5,
-    String8 = 6,
+    String8 = 6, // only lcs
     IdeModel = 7,
-    Byte128 = 8,
+    Byte128 = 8, // only SA
 }
 
 #[derive(Debug)]
