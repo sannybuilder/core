@@ -1,19 +1,9 @@
 use super::ffi::{Source, SymbolInfoMap, SymbolType};
 use crate::dictionary::dictionary_num_by_str::DictNumByStr;
 use crate::language_service::server::{CACHE_FILE_SYMBOLS, CACHE_FILE_TREE};
+use crate::utils::compiler_const::*;
 use std::fs;
 use std::path::Path;
-
-// from compiler.ini
-const TOKEN_INCLUDE: i32 = 103;
-const TOKEN_CONST: i32 = 65;
-const TOKEN_END: i32 = 255;
-const TOKEN_INT: i32 = 1;
-const TOKEN_FLOAT: i32 = 2;
-const TOKEN_STRING: i32 = 3;
-const TOKEN_LONGSTRING: i32 = 4;
-const TOKEN_HANDLE: i32 = 5;
-const TOKEN_BOOL: i32 = 6;
 
 fn document_tree_walk<'a>(
     content: &String,

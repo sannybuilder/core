@@ -15,35 +15,38 @@ pub enum SyntaxKind {
     ConstDeclaration,
     ConstInitialization,
 
-    OperatorBitwiseNot,      // ~
-    OperatorBitwiseAnd,      // &
-    OperatorBitwiseOr,       // |
-    OperatorBitwiseXor,      // ^
-    OperatorBitwiseMod,      // %
-    OperatorBitwiseShr,      // >>
-    OperatorBitwiseShl,      // <<
-    OperatorPlus,            // +
-    OperatorMinus,           // -
-    OperatorMul,             // *
-    OperatorDiv,             // /
-    OperatorEqual,           // =
-    OperatorEqualEqual,      // ==
-    OperatorLessGreater,     // <>
-    OperatorBitwiseNotEqual, // ~=
-    OperatorBitwiseAndEqual, // &=
-    OperatorBitwiseOrEqual,  // |=
-    OperatorBitwiseXorEqual, // ^=
-    OperatorBitwiseModEqual, // %=
-    OperatorBitwiseShrEqual, // >>=
-    OperatorBitwiseShlEqual, // <<=
-    OperatorPlusEqual,       // +=
-    OperatorMinusEqual,      // -=
-    OperatorMulEqual,        // *=
-    OperatorDivEqual,        // /=
-    OperatorGreater,         // >
-    OperatorGreaterEqual,    // >=
-    OperatorLess,            // <
-    OperatorLessEqual,       // <=
+    OperatorBitwiseNot,            // ~
+    OperatorBitwiseAnd,            // &
+    OperatorBitwiseOr,             // |
+    OperatorBitwiseXor,            // ^
+    OperatorBitwiseMod,            // %
+    OperatorBitwiseShr,            // >>
+    OperatorBitwiseShl,            // <<
+    OperatorPlus,                  // +
+    OperatorMinus,                 // -
+    OperatorMul,                   // *
+    OperatorDiv,                   // /
+    OperatorEqual,                 // =
+    OperatorEqualEqual,            // ==
+    OperatorLessGreater,           // <>
+    OperatorBitwiseNotEqual,       // ~=
+    OperatorBitwiseAndEqual,       // &=
+    OperatorBitwiseOrEqual,        // |=
+    OperatorBitwiseXorEqual,       // ^=
+    OperatorBitwiseModEqual,       // %=
+    OperatorBitwiseShrEqual,       // >>=
+    OperatorBitwiseShlEqual,       // <<=
+    OperatorPlusEqual,             // +=
+    OperatorMinusEqual,            // -=
+    OperatorMulEqual,              // *=
+    OperatorDivEqual,              // /=
+    OperatorGreater,               // >
+    OperatorGreaterEqual,          // >=
+    OperatorLess,                  // <
+    OperatorLessEqual,             // <=
+    OperatorTimedAdditionEqual,    // +=@
+    OperatorTimedSubtractionEqual, // -=@
+    OperatorCastEqual,             // =#
 }
 
 #[derive(Debug, PartialEq)]
@@ -82,7 +85,7 @@ pub enum Variable {
     Local(SingleVariable),
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
-    Adma(SingleVariable)
+    Adma(SingleVariable),
 }
 
 impl Variable {

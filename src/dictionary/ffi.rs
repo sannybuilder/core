@@ -5,6 +5,7 @@ use std::ffi::CString;
 
 use super::config::Config;
 
+#[derive(Default)]
 pub struct Dict<T, U> {
     pub map: HashMap<T, U>,
     pub config: Config,

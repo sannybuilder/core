@@ -6,6 +6,8 @@ use crate::parser::interface::*;
 
 pub fn assignment(s: Span) -> R<Token> {
     alt((
+        op_timed_addition_equal,
+        op_timed_subtraction_equal,
         op_plus_equal,
         op_minus_equal,
         op_mul_equal,
@@ -17,6 +19,7 @@ pub fn assignment(s: Span) -> R<Token> {
         op_bitwise_shr_equal,
         op_bitwise_shl_equal,
         op_bitwise_not_equal,
+        op_cast_equal,
         op_equal,
     ))(s)
 }
@@ -215,5 +218,23 @@ fn op_bitwise_shr_equal(s: Span) -> R<Token> {
 fn op_bitwise_shl_equal(s: Span) -> R<Token> {
     map(tag("<<="), |s: Span| {
         Token::from(s, SyntaxKind::OperatorBitwiseShlEqual)
+    })(s)
+}
+
+fn op_timed_addition_equal(s: Span) -> R<Token> {
+    map(tag("+=@"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorTimedAdditionEqual)
+    })(s)
+}
+
+fn op_timed_subtraction_equal(s: Span) -> R<Token> {
+    map(tag("-=@"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorTimedSubtractionEqual)
+    })(s)
+}
+
+fn op_cast_equal(s: Span) -> R<Token> {
+    map(tag("=#"), |s: Span| {
+        Token::from(s, SyntaxKind::OperatorCastEqual)
     })(s)
 }
