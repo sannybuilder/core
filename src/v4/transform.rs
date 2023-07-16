@@ -65,7 +65,7 @@ pub fn try_tranform(
 ) -> Option<String> {
     let e = ast.body.get(0)?;
 
-    match e {
+    return match e {
         Node::Unary(e) => {
             if e.get_operator() == &SyntaxKind::OperatorBitwiseNot {
                 if is_variable(&e.operand) {
@@ -74,6 +74,7 @@ pub fn try_tranform(
                     return format_unary(op_id, token_str(expr, as_token(&e.operand)?));
                 }
             }
+            None
         }
         Node::Binary(e) => {
             let left = &e.left;
@@ -99,7 +100,7 @@ pub fn try_tranform(
                     );
                 }
                 Node::Binary(binary_expr) => {
-                    let f = |op| {
+                    let op = |op| {
                         format_ternary(
                             *ns.get_opcode_by_command_name(op)?,
                             token_str(expr, dest_var_token),
@@ -109,43 +110,23 @@ pub fn try_tranform(
                         )
                     };
                     match binary_expr.get_operator() {
-                        SyntaxKind::OperatorBitwiseAnd => {
-                            return f(OP_AND);
-                        }
-                        SyntaxKind::OperatorBitwiseOr => {
-                            return f(OP_OR);
-                        }
-                        SyntaxKind::OperatorBitwiseXor => {
-                            return f(OP_XOR);
-                        }
-                        SyntaxKind::OperatorBitwiseMod => {
-                            return f(OP_MOD);
-                        }
-                        SyntaxKind::OperatorBitwiseShr => {
-                            return f(OP_SHR);
-                        }
-                        SyntaxKind::OperatorBitwiseShl => {
-                            return f(OP_SHL);
-                        }
-                        SyntaxKind::OperatorPlus => {
-                            return f(OP_INT_ADD);
-                        }
-                        SyntaxKind::OperatorMinus => {
-                            return f(OP_INT_SUB);
-                        }
-                        SyntaxKind::OperatorMul => {
-                            return f(OP_INT_MUL);
-                        }
-                        SyntaxKind::OperatorDiv => {
-                            return f(OP_INT_DIV);
-                        }
-                        _ => return None,
+                        SyntaxKind::OperatorBitwiseAnd => op(OP_AND),
+                        SyntaxKind::OperatorBitwiseOr => op(OP_OR),
+                        SyntaxKind::OperatorBitwiseXor => op(OP_XOR),
+                        SyntaxKind::OperatorBitwiseMod => op(OP_MOD),
+                        SyntaxKind::OperatorBitwiseShr => op(OP_SHR),
+                        SyntaxKind::OperatorBitwiseShl => op(OP_SHL),
+                        SyntaxKind::OperatorPlus => op(OP_INT_ADD),
+                        SyntaxKind::OperatorMinus => op(OP_INT_SUB),
+                        SyntaxKind::OperatorMul => op(OP_INT_MUL),
+                        SyntaxKind::OperatorDiv => op(OP_INT_DIV),
+                        _ => None,
                     }
                 }
                 _ => {
                     let right_token = as_token(&right)?;
 
-                    let f = |op| {
+                    let op = |op| {
                         format_binary_no_reorder(
                             *ns.get_opcode_by_command_name(op)?,
                             token_str(expr, dest_var_token),
@@ -153,52 +134,47 @@ pub fn try_tranform(
                         )
                     };
                     match e.get_operator() {
-                        SyntaxKind::OperatorBitwiseAndEqual => {
-                            return f(OP_AND_COMPOUND);
-                        }
-                        SyntaxKind::OperatorBitwiseOrEqual => {
-                            return f(OP_OR_COMPOUND);
-                        }
-                        SyntaxKind::OperatorBitwiseXorEqual => {
-                            return f(OP_XOR_COMPOUND);
-                        }
-                        SyntaxKind::OperatorBitwiseModEqual => {
-                            return f(OP_MOD_COMPOUND);
-                        }
-                        SyntaxKind::OperatorBitwiseShrEqual => {
-                            return f(OP_SHR_COMPOUND);
-                        }
-                        SyntaxKind::OperatorBitwiseShlEqual => {
-                            return f(OP_SHL_COMPOUND);
-                        }
+                        SyntaxKind::OperatorBitwiseAndEqual => op(OP_AND_COMPOUND),
+                        SyntaxKind::OperatorBitwiseOrEqual => op(OP_OR_COMPOUND),
+                        SyntaxKind::OperatorBitwiseXorEqual => op(OP_XOR_COMPOUND),
+                        SyntaxKind::OperatorBitwiseModEqual => op(OP_MOD_COMPOUND),
+                        SyntaxKind::OperatorBitwiseShrEqual => op(OP_SHR_COMPOUND),
+                        SyntaxKind::OperatorBitwiseShlEqual => op(OP_SHL_COMPOUND),
                         SyntaxKind::OperatorTimedAdditionEqual => {
                             let left_var = as_variable(left)?;
                             match right_token.syntax_kind {
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
                                     // var +=@ float
-                                    return f(OP_ADD_TIMED_VAL_TO_FLOAT_VAR);
+                                    return op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR);
                                 }
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
                                     // lvar +=@ float
-                                    return f(OP_ADD_TIMED_VAL_TO_FLOAT_LVAR);
+                                    return op(OP_ADD_TIMED_VAL_TO_FLOAT_LVAR)
+                                        .or(op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR)); // vcs
                                 }
                                 SyntaxKind::GlobalVariable if left_var.is_global() => {
                                     // var +=@ var
-                                    return f(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR);
+                                    return op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR);
                                 }
                                 SyntaxKind::LocalVariable if left_var.is_local() => {
                                     // lvar +=@ lvar
-                                    return f(OP_ADD_TIMED_FLOAT_LVAR_TO_FLOAT_LVAR);
+                                    return op(OP_ADD_TIMED_FLOAT_LVAR_TO_FLOAT_LVAR)
+                                        .or(op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR));
+                                    // vcs
                                 }
                                 SyntaxKind::LocalVariable if left_var.is_global() => {
                                     // var +=@ lvar
-                                    return f(OP_ADD_TIMED_FLOAT_LVAR_TO_FLOAT_VAR);
+                                    return op(OP_ADD_TIMED_FLOAT_LVAR_TO_FLOAT_VAR)
+                                        .or(op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR));
+                                    // vcs
                                 }
                                 SyntaxKind::GlobalVariable if left_var.is_local() => {
                                     // lvar +=@ var
-                                    return f(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_LVAR);
+                                    return op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_LVAR)
+                                        .or(op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR));
+                                    // vcs
                                 }
-                                _ => {}
+                                _ => None,
                             }
                         }
                         SyntaxKind::OperatorTimedSubtractionEqual => {
@@ -206,29 +182,33 @@ pub fn try_tranform(
                             match right_token.syntax_kind {
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
                                     // var -=@ float
-                                    return f(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR);
+                                    return op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR);
                                 }
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
                                     // lvar -=@ float
-                                    return f(OP_SUB_TIMED_VAL_FROM_FLOAT_LVAR);
+                                    return op(OP_SUB_TIMED_VAL_FROM_FLOAT_LVAR)
+                                        .or(op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR));
                                 }
                                 SyntaxKind::GlobalVariable if left_var.is_global() => {
                                     // var -=@ var
-                                    return f(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR);
+                                    return op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR);
                                 }
                                 SyntaxKind::LocalVariable if left_var.is_local() => {
                                     // lvar -=@ lvar
-                                    return f(OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_LVAR);
+                                    return op(OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_LVAR)
+                                        .or(op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR));
                                 }
                                 SyntaxKind::LocalVariable if left_var.is_global() => {
                                     // var -=@ lvar
-                                    return f(OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_VAR);
+                                    return op(OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_VAR)
+                                        .or(op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR));
                                 }
                                 SyntaxKind::GlobalVariable if left_var.is_local() => {
                                     // lvar -=@ var
-                                    return f(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_LVAR);
+                                    return op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_LVAR)
+                                        .or(op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR));
                                 }
-                                _ => {}
+                                _ => None,
                             }
                         }
                         SyntaxKind::OperatorCastEqual => {
@@ -250,14 +230,14 @@ pub fn try_tranform(
                                         && t2 == TOKEN_FLOAT =>
                                 {
                                     // var =# var // int = float
-                                    return f(OP_CSET_VAR_INT_TO_VAR_FLOAT);
+                                    return op(OP_CSET_VAR_INT_TO_VAR_FLOAT);
                                 }
                                 SyntaxKind::GlobalVariable
                                     if left_var.is_global()
                                         && t1 == TOKEN_FLOAT
                                         && t2 == TOKEN_INT =>
                                 {
-                                    return f(OP_CSET_VAR_FLOAT_TO_VAR_INT);
+                                    op(OP_CSET_VAR_FLOAT_TO_VAR_INT)
                                 }
                                 SyntaxKind::LocalVariable
                                     if left_var.is_local()
@@ -265,7 +245,8 @@ pub fn try_tranform(
                                         && t2 == TOKEN_FLOAT =>
                                 {
                                     // lvar =# lvar // int = float
-                                    return f(OP_CSET_LVAR_INT_TO_LVAR_FLOAT);
+                                    return op(OP_CSET_LVAR_INT_TO_LVAR_FLOAT)
+                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
                                 }
                                 SyntaxKind::LocalVariable
                                     if left_var.is_local()
@@ -273,7 +254,8 @@ pub fn try_tranform(
                                         && t2 == TOKEN_INT =>
                                 {
                                     // lvar =# lvar // float = int
-                                    return f(OP_CSET_LVAR_FLOAT_TO_LVAR_INT);
+                                    return op(OP_CSET_LVAR_FLOAT_TO_LVAR_INT)
+                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
                                 }
                                 SyntaxKind::GlobalVariable
                                     if left_var.is_local()
@@ -281,7 +263,8 @@ pub fn try_tranform(
                                         && t2 == TOKEN_FLOAT =>
                                 {
                                     // lvar =# var // int = float
-                                    return f(OP_CSET_LVAR_INT_TO_VAR_FLOAT);
+                                    return op(OP_CSET_LVAR_INT_TO_VAR_FLOAT)
+                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
                                 }
                                 SyntaxKind::GlobalVariable
                                     if left_var.is_local()
@@ -289,7 +272,8 @@ pub fn try_tranform(
                                         && t2 == TOKEN_INT =>
                                 {
                                     // lvar =# var // float = int
-                                    return f(OP_CSET_LVAR_FLOAT_TO_VAR_INT);
+                                    return op(OP_CSET_LVAR_FLOAT_TO_VAR_INT)
+                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
                                 }
                                 SyntaxKind::LocalVariable
                                     if left_var.is_global()
@@ -297,7 +281,8 @@ pub fn try_tranform(
                                         && t2 == TOKEN_FLOAT =>
                                 {
                                     // var =# lvar // int = float
-                                    return f(OP_CSET_VAR_INT_TO_LVAR_FLOAT);
+                                    return op(OP_CSET_VAR_INT_TO_LVAR_FLOAT)
+                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
                                 }
                                 SyntaxKind::LocalVariable
                                     if left_var.is_global()
@@ -305,41 +290,40 @@ pub fn try_tranform(
                                         && t2 == TOKEN_INT =>
                                 {
                                     // var =# lvar // float = int
-                                    return f(OP_CSET_VAR_FLOAT_TO_LVAR_INT);
+                                    return op(OP_CSET_VAR_FLOAT_TO_LVAR_INT)
+                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
                                 }
 
-                                _ => {}
+                                _ => None,
                             }
                         }
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(left)?;
                             match right_token.syntax_kind {
+                                // var = int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
-                                    // var = int
-                                    return f(OP_SET_VAR_INT);
+                                    op(OP_SET_VAR_INT)
                                 }
+                                // var = float
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
-                                    // var = float
-                                    return f(OP_SET_VAR_FLOAT);
+                                    op(OP_SET_VAR_FLOAT)
                                 }
+                                // lvar = int
                                 SyntaxKind::IntegerLiteral if left_var.is_local() => {
-                                    // lvar = int
-                                    return f(OP_SET_LVAR_INT);
+                                    op(OP_SET_LVAR_INT).or(op(OP_SET_VAR_INT))
                                 }
+                                // lvar = float
                                 SyntaxKind::FloatLiteral if left_var.is_local() => {
-                                    // lvar = float
-                                    return f(OP_SET_LVAR_FLOAT);
+                                    op(OP_SET_LVAR_FLOAT).or(op(OP_SET_VAR_FLOAT))
                                 }
-                                _ => {}
+                                _ => None,
                             }
                         }
-                        _ => {}
+                        _ => None,
                     }
                 }
             }
         }
-        _ => {}
-    }
-
-    None
+        _ => None,
+    };
 }
