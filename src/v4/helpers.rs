@@ -52,6 +52,36 @@ pub fn as_token(node: &Node) -> Option<&Token> {
     }
 }
 
+pub fn is_identifier(node: &Node) -> bool {
+    as_identifier(&node).is_some()
+}
+
+pub fn as_identifier(node: &Node) -> Option<&Token> {
+    match node {
+        Node::Literal(t) if t.syntax_kind == SyntaxKind::Identifier => Some(t),
+        _ => None,
+    }
+}
+
+pub fn is_number(node: &Node) -> bool {
+    as_number(&node).is_some()
+}
+
+pub fn as_number(node: &Node) -> Option<&Token> {
+    match node {
+        Node::Literal(t)
+            if matches!(
+                t.syntax_kind,
+                SyntaxKind::IntegerLiteral | SyntaxKind::FloatLiteral
+            ) =>
+        {
+            Some(t)
+        }
+        Node::Unary(e) if e.get_operator() == &SyntaxKind::OperatorMinus => as_number(&e.operand),
+        _ => None,
+    }
+}
+
 pub fn format_unary(op: OpId, dest_var: &str) -> Option<String> {
     format!("{:04X}: {dest_var}", op).into()
 }

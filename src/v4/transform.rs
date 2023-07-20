@@ -1,10 +1,14 @@
 use super::helpers::*;
 use crate::{
-    dictionary::dictionary_num_by_str::DictNumByStr,
+    dictionary::{dictionary_num_by_str::DictNumByStr, dictionary_str_by_str::DictStrByStr},
     legacy_ini::OpcodeTable,
     namespaces::namespaces::Namespaces,
-    parser::interface::{Node, SyntaxKind, AST},
+    parser::{
+        interface::{Node, SyntaxKind, AST},
+        parse,
+    },
 };
+use std::ffi::CString;
 
 static OP_AND: &'static str = "BIT_AND";
 static OP_OR: &'static str = "BIT_OR";
@@ -62,16 +66,38 @@ pub fn try_tranform(
     ns: &Namespaces,
     legacy_ini: &OpcodeTable,
     var_types: &DictNumByStr,
+    const_lookup: &DictStrByStr,
 ) -> Option<String> {
     let e = ast.body.get(0)?;
+
+    macro_rules! resolve {
+        ($node: expr) => {{
+            let name = token_str(expr, as_token($node)?);
+            if is_identifier($node) {
+                let const_value = const_lookup
+                    .map
+                    .get(&CString::new(name).unwrap())
+                    .map(|v| v.to_str())?
+                    .ok()?;
+
+                let ast = parse(const_value).ok()?.1;
+                let token = ast.body.get(0)?.clone();
+                let text = token_str(const_value, as_token(&token)?);
+                (token, text)
+            } else {
+                ($node.as_ref().clone(), name)
+            }
+        }};
+    }
 
     return match e {
         Node::Unary(e) => {
             if e.get_operator() == &SyntaxKind::OperatorBitwiseNot {
-                if is_variable(&e.operand) {
+                let (var, var_name) = resolve!(&e.operand);
+                if is_variable(&var) {
                     // ~var
                     let op_id = *ns.get_opcode_by_command_name(OP_NOT_UNARY)?;
-                    return format_unary(op_id, token_str(expr, as_token(&e.operand)?));
+                    return format_unary(op_id, var_name);
                 }
             }
             None
@@ -79,33 +105,49 @@ pub fn try_tranform(
         Node::Binary(e) => {
             let left = &e.left;
             let right = &e.right;
-
-            if !is_variable(left) {
-                return None;
-            }
-
-            let dest_var_token = as_token(&left)?;
+            let operator = e.get_operator();
 
             match right.as_ref() {
-                Node::Unary(unary)
-                    if e.get_operator() == &SyntaxKind::OperatorEqual
-                        && unary.get_operator() == &SyntaxKind::OperatorBitwiseNot =>
-                {
+                Node::Unary(unary) if unary.get_operator() == &SyntaxKind::OperatorBitwiseNot => {
+                    if !matches!(operator, SyntaxKind::OperatorEqual) {
+                        return None;
+                    }
+                    let (var, var_name) = resolve!(left);
+                    let (operand, operand_name) = resolve!(&unary.operand);
+                    if !is_variable(&var) || !is_variable(&operand) {
+                        return None;
+                    }
                     // var = ~var
                     return format_binary(
                         *ns.get_opcode_by_command_name(OP_NOT)?,
-                        token_str(expr, dest_var_token),
-                        token_str(expr, as_token(&unary.operand)?),
+                        var_name,
+                        operand_name,
                         legacy_ini,
                     );
                 }
                 Node::Binary(binary_expr) => {
+                    if !matches!(operator, SyntaxKind::OperatorEqual) {
+                        return None;
+                    }
+
                     let op = |op| {
+                        let (var, var_name) = resolve!(left);
+                        let (left_operand, left_operand_name) = resolve!(&binary_expr.left);
+                        let (right_operand, right_operand_name) = resolve!(&binary_expr.right);
+                        if !is_variable(&var) {
+                            return None;
+                        }
+                        if !is_variable(&left_operand) && !is_number(&left_operand) {
+                            return None;
+                        }
+                        if !is_variable(&right_operand) && !is_number(&right_operand) {
+                            return None;
+                        }
                         format_ternary(
                             *ns.get_opcode_by_command_name(op)?,
-                            token_str(expr, dest_var_token),
-                            token_str(expr, as_token(&binary_expr.left)?),
-                            token_str(expr, as_token(&binary_expr.right)?),
+                            var_name,
+                            left_operand_name,
+                            right_operand_name,
                             legacy_ini,
                         )
                     };
@@ -123,17 +165,25 @@ pub fn try_tranform(
                         _ => None,
                     }
                 }
-                _ => {
-                    let right_token = as_token(&right)?;
+                Node::Literal(_) | Node::Variable(_) | Node::Unary(_) => {
+                    let (var, var_name) = resolve!(left);
+                    let (right_operand, right_operand_name) = resolve!(&right);
+                    let right_token = as_token(&right_operand)?; // todo: should be a variable or a number
+                    if !is_variable(&var) {
+                        return None;
+                    }
+                    if !is_variable(&right_operand) && !is_number(&right_operand) {
+                        return None;
+                    }
 
                     let op = |op| {
                         format_binary_no_reorder(
                             *ns.get_opcode_by_command_name(op)?,
-                            token_str(expr, dest_var_token),
-                            token_str(expr, right_token),
+                            var_name,
+                            right_operand_name,
                         )
                     };
-                    match e.get_operator() {
+                    match operator {
                         SyntaxKind::OperatorBitwiseAndEqual => op(OP_AND_COMPOUND),
                         SyntaxKind::OperatorBitwiseOrEqual => op(OP_OR_COMPOUND),
                         SyntaxKind::OperatorBitwiseXorEqual => op(OP_XOR_COMPOUND),
@@ -141,7 +191,7 @@ pub fn try_tranform(
                         SyntaxKind::OperatorBitwiseShrEqual => op(OP_SHR_COMPOUND),
                         SyntaxKind::OperatorBitwiseShlEqual => op(OP_SHL_COMPOUND),
                         SyntaxKind::OperatorTimedAdditionEqual => {
-                            let left_var = as_variable(left)?;
+                            let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
                                     // var +=@ float
@@ -178,7 +228,7 @@ pub fn try_tranform(
                             }
                         }
                         SyntaxKind::OperatorTimedSubtractionEqual => {
-                            let left_var = as_variable(left)?;
+                            let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
                                 SyntaxKind::FloatLiteral if left_var.is_global() => {
                                     // var -=@ float
@@ -213,16 +263,14 @@ pub fn try_tranform(
                         }
                         SyntaxKind::OperatorCastEqual => {
                             // requires type info
-                            if !is_variable(right) {
+                            if !is_variable(&right_operand) {
                                 return None;
                             }
-                            let v1 = token_str(expr, dest_var_token);
-                            let v2 = token_str(expr, right_token);
-                            let t1 = *var_types.map.get(v1)?;
-                            let t2 = *var_types.map.get(v2)?;
+                            let t1 = *var_types.map.get(var_name)?;
+                            let t2 = *var_types.map.get(right_operand_name)?;
 
                             use crate::utils::compiler_const::*;
-                            let left_var = as_variable(left)?;
+                            let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
                                 SyntaxKind::GlobalVariable
                                     if left_var.is_global()
@@ -298,7 +346,7 @@ pub fn try_tranform(
                             }
                         }
                         SyntaxKind::OperatorEqual => {
-                            let left_var = as_variable(left)?;
+                            let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
                                 // var = int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
@@ -322,6 +370,7 @@ pub fn try_tranform(
                         _ => None,
                     }
                 }
+                _ => None,
             }
         }
         _ => None,

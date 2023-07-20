@@ -1,5 +1,6 @@
 use crate::{
-    dictionary::dictionary_num_by_str::DictNumByStr, legacy_ini::OpcodeTable,
+    dictionary::{dictionary_num_by_str::DictNumByStr, dictionary_str_by_str::DictStrByStr},
+    legacy_ini::OpcodeTable,
     namespaces::namespaces::Namespaces,
 };
 
@@ -12,13 +13,16 @@ pub fn transform(
     ns: &Namespaces,
     legacy_ini: &OpcodeTable,
     var_types: &DictNumByStr,
+    const_lookup: &DictStrByStr,
 ) -> Option<String> {
     let body = crate::parser::parse(expr).ok()?.1;
-    transform::try_tranform(&body, expr, ns, legacy_ini, var_types)
+    transform::try_tranform(&body, expr, ns, legacy_ini, var_types, const_lookup)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+
     use crate::legacy_ini::Game;
 
     use super::*;
@@ -29,15 +33,19 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let dict = DictNumByStr::default();
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
 
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
 
         assert_eq!(t("~0@"), "0B1A: 0@");
         assert_eq!(t("~$var"), "0B1A: $var");
         assert_eq!(t("~&10"), "0B1A: &10");
         assert_eq!(t("~10@($_,1i)"), "0B1A: 10@($_,1i)");
         assert_eq!(t("~$0101(1000@,12f)"), "0B1A: $0101(1000@,12f)");
+        assert_eq!(t("~x"), "0B1A: 3@");
     }
 
     #[test]
@@ -47,8 +55,13 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let dict = DictNumByStr::default();
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
+        const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
         assert_eq!(t("0@ &= 1@"), "0B17: 0@ 1@");
         assert_eq!(t("0@ &= 100"), "0B17: 0@ 100");
         assert_eq!(t("0@ &= 42.01"), "0B17: 0@ 42.01");
@@ -64,6 +77,17 @@ mod tests {
         assert_eq!(t("0@ = 0"), "0006: 0@ 0");
         assert_eq!(t("$var[10] = 5.0"), "0005: $var[10] 5.0");
         assert_eq!(t("0@(1@,1i) = 0.0"), "0007: 0@(1@,1i) 0.0");
+        assert_eq!(t("x &= y"), "0B17: 3@ 4@");
+        assert_eq!(t("x |= y"), "0B18: 3@ 4@");
+        assert_eq!(t("x ^= y"), "0B19: 3@ 4@");
+        assert_eq!(t("x %= y"), "0B1B: 3@ 4@");
+        assert_eq!(t("x >>= y"), "0B1C: 3@ 4@");
+        assert_eq!(t("x <<= y"), "0B1D: 3@ 4@");
+        // assert_eq!(t("x = y"), "0006: 3@ 4@");
+        assert_eq!(t("x = 5"), "0006: 3@ 5");
+        assert_eq!(t("x = 5.0"), "0007: 3@ 5.0");
+
+        assert_ne!(t("0@ ^= ~1@"), "0B19: 0@ ~1@");
     }
 
     #[test]
@@ -73,8 +97,14 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let dict = DictNumByStr::default();
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
+        const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+        const_lookup.add(CString::new("z").unwrap(), CString::new("5@").unwrap());
+
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
         assert_eq!(t("0@ = -1 & 1@"), "0B10: 0@ -1 1@");
         assert_eq!(t("0@ = 1 | 1@"), "0B11: 0@ 1 1@");
         assert_eq!(t("0@ = 1 ^ 1@"), "0B12: 0@ 1 1@");
@@ -85,6 +115,18 @@ mod tests {
         assert_eq!(t("0@ = 1 - 2"), "0A8F: 0@ 1 2");
         assert_eq!(t("0@ = 1 * 2"), "0A90: 0@ 1 2");
         assert_eq!(t("0@ = 1 / 2"), "0A91: 0@ 1 2");
+        assert_eq!(t("x = y & z"), "0B10: 3@ 4@ 5@");
+        assert_eq!(t("x = y | z"), "0B11: 3@ 4@ 5@");
+        assert_eq!(t("x = y ^ z"), "0B12: 3@ 4@ 5@");
+        assert_eq!(t("x = y % z"), "0B14: 3@ 4@ 5@");
+        assert_eq!(t("x = y >> z"), "0B15: 3@ 4@ 5@");
+        assert_eq!(t("x = y << z"), "0B16: 3@ 4@ 5@");
+        assert_eq!(t("x = y + z"), "0A8E: 3@ 4@ 5@");
+        assert_eq!(t("x = y - z"), "0A8F: 3@ 4@ 5@");
+        assert_eq!(t("x = y * z"), "0A90: 3@ 4@ 5@");
+        assert_eq!(t("x = y / z"), "0A91: 3@ 4@ 5@");
+
+        assert_ne!(t("0@ += 1 | 1@"), "0B11: 0@ 1 1@");
     }
 
     #[test]
@@ -94,10 +136,15 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let dict = DictNumByStr::default();
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
+
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
         assert_eq!(t("0@ = ~1@"), "0B13: 0@ 1@");
         assert_eq!(t("~0@"), "0B1A: 0@");
+        assert_eq!(t("~x"), "0B1A: 3@");
     }
 
     #[test]
@@ -107,8 +154,12 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let dict = DictNumByStr::default();
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
+        const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
         // +=@
         assert_eq!(t("$var +=@ 5.0"), "0078: $var 5.0");
         assert_eq!(t("0@ +=@ 5.0"), "0079: 0@ 5.0");
@@ -116,6 +167,7 @@ mod tests {
         assert_eq!(t("0@ +=@ 1@"), "007B: 0@ 1@");
         assert_eq!(t("0@ +=@ $var"), "007C: 0@ $var");
         assert_eq!(t("$var +=@ 1@"), "007D: $var 1@");
+        assert_eq!(t("x +=@ y"), "007B: 3@ 4@");
 
         //-=@
         assert_eq!(t("$var -=@ 5.0"), "007E: $var 5.0");
@@ -124,6 +176,7 @@ mod tests {
         assert_eq!(t("0@ -=@ 1@"), "0081: 0@ 1@");
         assert_eq!(t("0@ -=@ $var"), "0082: 0@ $var");
         assert_eq!(t("$var -=@ 1@"), "0083: $var 1@");
+        assert_eq!(t("x -=@ y"), "0081: 3@ 4@");
     }
 
     #[test]
@@ -135,12 +188,19 @@ mod tests {
         let mut ns = Namespaces::new();
         ns.load_library("sa.json");
         let mut dict = DictNumByStr::default();
+        let mut const_lookup = DictStrByStr::default();
+        const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
+        const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+
         dict.add("$i".to_string(), TOKEN_INT);
         dict.add("0@".to_string(), TOKEN_INT);
+        dict.add("3@".to_string(), TOKEN_INT);
         dict.add("$f".to_string(), TOKEN_FLOAT);
         dict.add("1@".to_string(), TOKEN_FLOAT);
-        let t =
-            |input: &str| -> String { transform(input, &ns, &table, &dict).unwrap_or_default() };
+        dict.add("4@".to_string(), TOKEN_FLOAT);
+        let t = |input: &str| -> String {
+            transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
+        };
         assert_eq!(t("$i =# $f"), "008C: $i $f");
         assert_eq!(t("$f =# $i"), "008D: $f $i");
         assert_eq!(t("0@ =# $f"), "008E: 0@ $f");
@@ -149,5 +209,6 @@ mod tests {
         assert_eq!(t("$f =# 0@"), "0091: $f 0@");
         assert_eq!(t("0@ =# 1@"), "0092: 0@ 1@");
         assert_eq!(t("1@ =# 0@"), "0093: 1@ 0@");
+        assert_eq!(t("x =# y"), "0092: 3@ 4@");
     }
 }

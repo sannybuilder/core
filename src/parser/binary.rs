@@ -218,4 +218,36 @@ mod tests {
             }
         )
     }
+
+    #[test]
+    fn test_const_name() {
+        let (_, ast) = parse("x &= 1").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Binary(BinaryExpr {
+                    left: Box::new(Node::Literal(Token {
+                        start: 1,
+                        len: 1,
+                        syntax_kind: SyntaxKind::Identifier
+                    })),
+                    operator: Token {
+                        start: 3,
+                        len: 2,
+                        syntax_kind: SyntaxKind::OperatorBitwiseAndEqual
+                    },
+                    right: Box::new(Node::Literal(Token {
+                        start: 6,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 6,
+                        syntax_kind: SyntaxKind::BinaryExpr
+                    }
+                })]
+            }
+        );
+    }
 }

@@ -98,4 +98,31 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn test_negative_numbers() {
+        let (_, ast) = parse("-10").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr {
+                    operator: Token {
+                        syntax_kind: SyntaxKind::OperatorMinus,
+                        start: 1,
+                        len: 1
+                    },
+                    operand: Box::new(Node::Literal(Token {
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                        start: 2,
+                        len: 2
+                    })),
+                    token: Token {
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                        start: 1,
+                        len: 3
+                    }
+                })]
+            }
+        );
+    }
 }
