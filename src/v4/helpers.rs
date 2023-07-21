@@ -59,6 +59,9 @@ pub fn is_identifier(node: &Node) -> bool {
 pub fn as_identifier(node: &Node) -> Option<&Token> {
     match node {
         Node::Literal(t) if t.syntax_kind == SyntaxKind::Identifier => Some(t),
+        Node::Unary(e) if e.get_operator() == &SyntaxKind::OperatorMinus => {
+            as_identifier(&e.operand)
+        }
         _ => None,
     }
 }

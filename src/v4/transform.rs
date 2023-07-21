@@ -72,8 +72,8 @@ pub fn try_tranform(
 
     macro_rules! resolve {
         ($node: expr) => {{
-            let name = token_str(expr, as_token($node)?);
-            if is_identifier($node) {
+            let x = |token| -> Option<(Node, String)> {
+                let name = token_str(expr, token);
                 let const_value = const_lookup
                     .map
                     .get(&CString::new(name).unwrap())
@@ -81,11 +81,37 @@ pub fn try_tranform(
                     .ok()?;
 
                 let ast = parse(const_value).ok()?.1;
-                let token = ast.body.get(0)?.clone();
-                let text = token_str(const_value, as_token(&token)?);
-                (token, text)
-            } else {
-                ($node.as_ref().clone(), name)
+                let node = ast.body.get(0)?.clone();
+                let text = token_str(const_value, as_token(&node)?);
+                match node {
+                    Node::Unary(unary) if unary.get_operator() == &SyntaxKind::OperatorMinus => {
+                        Some((unary.operand.as_ref().clone(), String::from(text)))
+                    }
+                    _ => Some((node, String::from(text))),
+                }
+            };
+            match $node.as_ref() {
+                Node::Literal(token) if is_identifier($node) => x(token)?,
+                Node::Unary(unary) if unary.get_operator() == &SyntaxKind::OperatorMinus => {
+                    match unary.operand.as_ref() {
+                        Node::Literal(_) if is_identifier(&unary.operand) => {
+                            let (token, text) = x(as_token(&unary.operand)?)?;
+                            (token, format!("-{}", text))
+                        }
+                        Node::Literal(_) if is_number(&unary.operand) => (
+                            unary.operand.as_ref().clone(),
+                            format!("-{}", token_str(expr, as_token(&unary.operand)?)),
+                        ),
+                        _ => (
+                            $node.as_ref().clone(),
+                            String::from(token_str(expr, as_token($node)?)),
+                        ),
+                    }
+                }
+                _ => (
+                    $node.as_ref().clone(),
+                    String::from(token_str(expr, as_token($node)?)),
+                ),
             }
         }};
     }
@@ -97,7 +123,7 @@ pub fn try_tranform(
                 if is_variable(&var) {
                     // ~var
                     let op_id = *ns.get_opcode_by_command_name(OP_NOT_UNARY)?;
-                    return format_unary(op_id, var_name);
+                    return format_unary(op_id, &var_name);
                 }
             }
             None
@@ -120,8 +146,8 @@ pub fn try_tranform(
                     // var = ~var
                     return format_binary(
                         *ns.get_opcode_by_command_name(OP_NOT)?,
-                        var_name,
-                        operand_name,
+                        &var_name,
+                        &operand_name,
                         legacy_ini,
                     );
                 }
@@ -145,9 +171,9 @@ pub fn try_tranform(
                         }
                         format_ternary(
                             *ns.get_opcode_by_command_name(op)?,
-                            var_name,
-                            left_operand_name,
-                            right_operand_name,
+                            &var_name,
+                            &left_operand_name,
+                            &right_operand_name,
                             legacy_ini,
                         )
                     };
@@ -168,7 +194,7 @@ pub fn try_tranform(
                 Node::Literal(_) | Node::Variable(_) | Node::Unary(_) => {
                     let (var, var_name) = resolve!(left);
                     let (right_operand, right_operand_name) = resolve!(&right);
-                    let right_token = as_token(&right_operand)?; // todo: should be a variable or a number
+                    let right_token = as_token(&right_operand)?;
                     if !is_variable(&var) {
                         return None;
                     }
@@ -179,8 +205,8 @@ pub fn try_tranform(
                     let op = |op| {
                         format_binary_no_reorder(
                             *ns.get_opcode_by_command_name(op)?,
-                            var_name,
-                            right_operand_name,
+                            &var_name,
+                            &right_operand_name,
                         )
                     };
                     match operator {
@@ -193,15 +219,6 @@ pub fn try_tranform(
                         SyntaxKind::OperatorTimedAdditionEqual => {
                             let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
-                                SyntaxKind::FloatLiteral if left_var.is_global() => {
-                                    // var +=@ float
-                                    return op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR);
-                                }
-                                SyntaxKind::FloatLiteral if left_var.is_local() => {
-                                    // lvar +=@ float
-                                    return op(OP_ADD_TIMED_VAL_TO_FLOAT_LVAR)
-                                        .or(op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR)); // vcs
-                                }
                                 SyntaxKind::GlobalVariable if left_var.is_global() => {
                                     // var +=@ var
                                     return op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR);
@@ -224,21 +241,28 @@ pub fn try_tranform(
                                         .or(op(OP_ADD_TIMED_FLOAT_VAR_TO_FLOAT_VAR));
                                     // vcs
                                 }
-                                _ => None,
+
+                                _ => {
+                                    let right_number = as_number(&right_operand)?;
+                                    if right_number.syntax_kind == SyntaxKind::FloatLiteral {
+                                        if left_var.is_global() {
+                                            // var +=@ float
+                                            return op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR);
+                                        }
+                                        if left_var.is_local() {
+                                            // lvar +=@ float
+                                            return op(OP_ADD_TIMED_VAL_TO_FLOAT_LVAR)
+                                                .or(op(OP_ADD_TIMED_VAL_TO_FLOAT_VAR));
+                                            // vcs
+                                        }
+                                    }
+                                    None
+                                }
                             }
                         }
                         SyntaxKind::OperatorTimedSubtractionEqual => {
                             let left_var = as_variable(&var)?;
                             match right_token.syntax_kind {
-                                SyntaxKind::FloatLiteral if left_var.is_global() => {
-                                    // var -=@ float
-                                    return op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR);
-                                }
-                                SyntaxKind::FloatLiteral if left_var.is_local() => {
-                                    // lvar -=@ float
-                                    return op(OP_SUB_TIMED_VAL_FROM_FLOAT_LVAR)
-                                        .or(op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR));
-                                }
                                 SyntaxKind::GlobalVariable if left_var.is_global() => {
                                     // var -=@ var
                                     return op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR);
@@ -258,7 +282,22 @@ pub fn try_tranform(
                                     return op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_LVAR)
                                         .or(op(OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_VAR));
                                 }
-                                _ => None,
+                                _ => {
+                                    let right_number = as_number(&right_operand)?;
+
+                                    if right_number.syntax_kind == SyntaxKind::FloatLiteral {
+                                        if left_var.is_global() {
+                                            // var -=@ float
+                                            return op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR);
+                                        }
+                                        if left_var.is_local() {
+                                            // lvar -=@ float
+                                            return op(OP_SUB_TIMED_VAL_FROM_FLOAT_LVAR)
+                                                .or(op(OP_SUB_TIMED_VAL_FROM_FLOAT_VAR));
+                                        }
+                                    }
+                                    None
+                                }
                             }
                         }
                         SyntaxKind::OperatorCastEqual => {
@@ -266,8 +305,8 @@ pub fn try_tranform(
                             if !is_variable(&right_operand) {
                                 return None;
                             }
-                            let t1 = *var_types.map.get(var_name)?;
-                            let t2 = *var_types.map.get(right_operand_name)?;
+                            let t1 = *var_types.map.get(&var_name)?;
+                            let t2 = *var_types.map.get(&right_operand_name)?;
 
                             use crate::utils::compiler_const::*;
                             let left_var = as_variable(&var)?;

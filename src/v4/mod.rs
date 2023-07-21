@@ -58,6 +58,12 @@ mod tests {
         let mut const_lookup = DictStrByStr::default();
         const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
         const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+        const_lookup.add(CString::new("n").unwrap(), CString::new("100").unwrap());
+        const_lookup.add(CString::new("f").unwrap(), CString::new("100.0").unwrap());
+        const_lookup.add(
+            CString::new("fminus").unwrap(),
+            CString::new("-100.0").unwrap(),
+        );
 
         let t = |input: &str| -> String {
             transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
@@ -72,12 +78,33 @@ mod tests {
         assert_eq!(t("0@ >>= 1@"), "0B1C: 0@ 1@");
         assert_eq!(t("0@ <<= 1@"), "0B1D: 0@ 1@");
         assert_eq!(t("&101 <<= &123"), "0B1D: &101 &123");
+
         assert_eq!(t("$var = 5"), "0004: $var 5");
+        assert_eq!(t("$var = -5"), "0004: $var -5");
         assert_eq!(t("&100 = 5"), "0004: &100 5");
+        assert_eq!(t("$var = -n"), "0004: $var -100");
+
+        assert_eq!(t("$var = 5.0"), "0005: $var 5.0");
+        assert_eq!(t("$var = -5.0"), "0005: $var -5.0");
+        assert_eq!(t("&100 = 5.0"), "0005: &100 5.0");
+        assert_eq!(t("$var = -f"), "0005: $var -100.0");
+
         assert_eq!(t("0@ = 0"), "0006: 0@ 0");
+        assert_eq!(t("0@ = -1"), "0006: 0@ -1");
+        assert_eq!(t("0@ = n"), "0006: 0@ 100");
+        assert_eq!(t("0@ = -n"), "0006: 0@ -100");
+
+        assert_eq!(t("0@ = 0.5"), "0007: 0@ 0.5");
+        assert_eq!(t("0@ = -0.5"), "0007: 0@ -0.5");
+        assert_eq!(t("0@ = f"), "0007: 0@ 100.0");
+        assert_eq!(t("0@ = -f"), "0007: 0@ -100.0");
+        assert_eq!(t("0@ = fminus"), "0007: 0@ -100.0");
+        // assert_eq!(t("0@ = -fminus"), "0007: 0@ 100.0");
+
         assert_eq!(t("$var[10] = 5.0"), "0005: $var[10] 5.0");
         assert_eq!(t("0@(1@,1i) = 0.0"), "0007: 0@(1@,1i) 0.0");
         assert_eq!(t("x &= y"), "0B17: 3@ 4@");
+        assert_eq!(t("x &= -n"), "0B17: 3@ -100");
         assert_eq!(t("x |= y"), "0B18: 3@ 4@");
         assert_eq!(t("x ^= y"), "0B19: 3@ 4@");
         assert_eq!(t("x %= y"), "0B1B: 3@ 4@");
@@ -113,6 +140,7 @@ mod tests {
         assert_eq!(t("0@ = 1 << 1@"), "0B16: 0@ 1 1@");
         assert_eq!(t("0@ = 1 + 2"), "0A8E: 0@ 1 2");
         assert_eq!(t("0@ = 1 - 2"), "0A8F: 0@ 1 2");
+        assert_eq!(t("0@ = -1 - -2"), "0A8F: 0@ -1 -2");
         assert_eq!(t("0@ = 1 * 2"), "0A90: 0@ 1 2");
         assert_eq!(t("0@ = 1 / 2"), "0A91: 0@ 1 2");
         assert_eq!(t("x = y & z"), "0B10: 3@ 4@ 5@");
@@ -157,11 +185,16 @@ mod tests {
         let mut const_lookup = DictStrByStr::default();
         const_lookup.add(CString::new("x").unwrap(), CString::new("3@").unwrap());
         const_lookup.add(CString::new("y").unwrap(), CString::new("4@").unwrap());
+        const_lookup.add(CString::new("n").unwrap(), CString::new("100").unwrap());
+        const_lookup.add(CString::new("f").unwrap(), CString::new("100.0").unwrap());
         let t = |input: &str| -> String {
             transform(input, &ns, &table, &dict, &const_lookup).unwrap_or_default()
         };
         // +=@
         assert_eq!(t("$var +=@ 5.0"), "0078: $var 5.0");
+        assert_eq!(t("$var +=@ f"), "0078: $var 100.0");
+        assert_eq!(t("$var +=@ -f"), "0078: $var -100.0");
+        assert_eq!(t("$var +=@ -10.23"), "0078: $var -10.23");
         assert_eq!(t("0@ +=@ 5.0"), "0079: 0@ 5.0");
         assert_eq!(t("$var1 +=@ $var2"), "007A: $var1 $var2");
         assert_eq!(t("0@ +=@ 1@"), "007B: 0@ 1@");
@@ -171,6 +204,8 @@ mod tests {
 
         //-=@
         assert_eq!(t("$var -=@ 5.0"), "007E: $var 5.0");
+        assert_eq!(t("$var -=@ -5.0"), "007E: $var -5.0");
+        assert_eq!(t("$var -=@ -f"), "007E: $var -100.0");
         assert_eq!(t("0@ -=@ 5.0"), "007F: 0@ 5.0");
         assert_eq!(t("$var1 -=@ $var2"), "0080: $var1 $var2");
         assert_eq!(t("0@ -=@ 1@"), "0081: 0@ 1@");
