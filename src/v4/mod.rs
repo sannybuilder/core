@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(t("0@ = f"), "0007: 0@ 100.0");
         assert_eq!(t("0@ = -f"), "0007: 0@ -100.0");
         assert_eq!(t("0@ = fminus"), "0007: 0@ -100.0");
-        // assert_eq!(t("0@ = -fminus"), "0007: 0@ 100.0");
+        assert_eq!(t("0@ = -fminus"), "0007: 0@ 100.0");
 
         assert_eq!(t("$var[10] = 5.0"), "0005: $var[10] 5.0");
         assert_eq!(t("0@(1@,1i) = 0.0"), "0007: 0@(1@,1i) 0.0");
@@ -110,7 +110,7 @@ mod tests {
         assert_eq!(t("x %= y"), "0B1B: 3@ 4@");
         assert_eq!(t("x >>= y"), "0B1C: 3@ 4@");
         assert_eq!(t("x <<= y"), "0B1D: 3@ 4@");
-        // assert_eq!(t("x = y"), "0006: 3@ 4@");
+        assert_eq!(t("x = n"), "0006: 3@ 100");
         assert_eq!(t("x = 5"), "0006: 3@ 5");
         assert_eq!(t("x = 5.0"), "0007: 3@ 5.0");
 

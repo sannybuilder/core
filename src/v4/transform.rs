@@ -96,7 +96,13 @@ pub fn try_tranform(
                     match unary.operand.as_ref() {
                         Node::Literal(_) if is_identifier(&unary.operand) => {
                             let (token, text) = x(as_token(&unary.operand)?)?;
-                            (token, format!("-{}", text))
+
+                            // todo: operate on the number
+                            if text.starts_with('-') {
+                                (token, format!("{}", &text[1..]))
+                            } else {
+                                (token, format!("-{}", text))
+                            }
                         }
                         Node::Literal(_) if is_number(&unary.operand) => (
                             unary.operand.as_ref().clone(),
@@ -386,7 +392,10 @@ pub fn try_tranform(
                         }
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(&var)?;
-                            match right_token.syntax_kind {
+                            let right_number = as_number(&right_operand)?;
+
+                            match right_number.syntax_kind {
+                                
                                 // var = int
                                 SyntaxKind::IntegerLiteral if left_var.is_global() => {
                                     op(OP_SET_VAR_INT)
