@@ -178,6 +178,7 @@ pub fn find_constants<'a>(
                                 _type: SymbolType::Var,
                                 file_name: file_name.clone(),
                                 value: None,
+                                name_no_format: name.to_string(),
                             },
                         ))
                     }
@@ -189,12 +190,13 @@ pub fn find_constants<'a>(
                 let mut tokens = line.split('=');
 
                 if let Some(name) = tokens.next() {
-                    let name = name.trim().to_ascii_lowercase();
-                    if found_constants.iter().any(|(n, _)| n == &name) {
+                    let name = name.trim();
+                    let name_lower = name.to_ascii_lowercase();
+                    if found_constants.iter().any(|(n, _)| n == &name_lower) {
                         log::debug!(
                             "Found duplicate const declaration {} in line {}",
                             name,
-                            line_number
+                            line_number + 1
                         );
                         continue;
                     }
@@ -202,12 +204,13 @@ pub fn find_constants<'a>(
                         let value = value.trim();
                         match get_type(value) {
                             Some(_type) => found_constants.push((
-                                name,
+                                name_lower,
                                 SymbolInfoMap {
                                     line_number: line_number as u32,
                                     _type,
                                     file_name: file_name.clone(),
                                     value: Some(String::from(value)),
+                                    name_no_format: name.to_string(),
                                 },
                             )),
                             None => {
@@ -216,12 +219,13 @@ pub fn find_constants<'a>(
                                     .find(|x| x.0 == value.to_ascii_lowercase())
                                 {
                                     found_constants.push((
-                                        name,
+                                        name_lower,
                                         SymbolInfoMap {
                                             line_number: line_number as u32,
                                             _type: constant.1._type,
                                             file_name: file_name.clone(),
                                             value: constant.1.value.clone(),
+                                            name_no_format: name.to_string(),
                                         },
                                     ))
                                 };
