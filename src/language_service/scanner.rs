@@ -164,7 +164,25 @@ pub fn find_constants<'a>(
         let first = words.next().unwrap_or("");
         match reserved_words.map.get(first) {
             Some(token) => match *token {
-                TOKEN_CONST => inside_const = true,
+                TOKEN_CONST => {
+                    let rest = words.collect::<String>();
+
+                    if !rest.is_empty() {
+                        let declarations = split_const_line(&rest);
+
+                        for declaration in declarations.iter() {
+                            process_const_declaration(
+                                &declaration,
+                                &mut found_constants,
+                                line_number,
+                                &file_name,
+                            );
+                        }
+                    } else {
+                        inside_const = true;
+                    }
+
+                }
                 TOKEN_END if inside_const => inside_const = false,
                 TOKEN_INT | TOKEN_FLOAT | TOKEN_STRING | TOKEN_LONGSTRING | TOKEN_HANDLE
                 | TOKEN_BOOL => {
@@ -186,52 +204,15 @@ pub fn find_constants<'a>(
                 _ => {}
             },
             _ if inside_const => {
-                // todo: try nom parser
-                let mut tokens = line.split('=');
+                let declarations = split_const_line(line);
 
-                if let Some(name) = tokens.next() {
-                    let name = name.trim();
-                    let name_lower = name.to_ascii_lowercase();
-                    if found_constants.iter().any(|(n, _)| n == &name_lower) {
-                        log::debug!(
-                            "Found duplicate const declaration {} in line {}",
-                            name,
-                            line_number + 1
-                        );
-                        continue;
-                    }
-                    if let Some(value) = tokens.next() {
-                        let value = value.trim();
-                        match get_type(value) {
-                            Some(_type) => found_constants.push((
-                                name_lower,
-                                SymbolInfoMap {
-                                    line_number: line_number as u32,
-                                    _type,
-                                    file_name: file_name.clone(),
-                                    value: Some(String::from(value)),
-                                    name_no_format: name.to_string(),
-                                },
-                            )),
-                            None => {
-                                if let Some(constant) = found_constants
-                                    .iter()
-                                    .find(|x| x.0 == value.to_ascii_lowercase())
-                                {
-                                    found_constants.push((
-                                        name_lower,
-                                        SymbolInfoMap {
-                                            line_number: line_number as u32,
-                                            _type: constant.1._type,
-                                            file_name: file_name.clone(),
-                                            value: constant.1.value.clone(),
-                                            name_no_format: name.to_string(),
-                                        },
-                                    ))
-                                };
-                            }
-                        }
-                    }
+                for declaration in declarations.iter() {
+                    process_const_declaration(
+                        &declaration,
+                        &mut found_constants,
+                        line_number,
+                        &file_name,
+                    );
                 }
             }
             _ => {
@@ -243,6 +224,91 @@ pub fn find_constants<'a>(
     Some(found_constants)
 }
 
+pub fn process_const_declaration(
+    line: &str,
+    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    line_number: usize,
+    file_name: &Option<String>,
+) {
+    let mut tokens = line.split('=');
+
+    if let Some(name) = tokens.next() {
+        let name = name.trim();
+        let name_lower = name.to_ascii_lowercase();
+        if found_constants.iter().any(|(n, _)| n == &name_lower) {
+            log::debug!(
+                "Found duplicate const declaration {} in line {}",
+                name,
+                line_number + 1
+            );
+            return;
+        }
+        if let Some(value) = tokens.next() {
+            let value = value.trim();
+            match get_type(value) {
+                Some(_type) => found_constants.push((
+                    name_lower,
+                    SymbolInfoMap {
+                        line_number: line_number as u32,
+                        _type,
+                        file_name: file_name.clone(),
+                        value: Some(String::from(value)),
+                        name_no_format: name.to_string(),
+                    },
+                )),
+                None => {
+                    if let Some(constant) = found_constants
+                        .iter()
+                        .find(|x| x.0 == value.to_ascii_lowercase())
+                    {
+                        found_constants.push((
+                            name_lower,
+                            SymbolInfoMap {
+                                line_number: line_number as u32,
+                                _type: constant.1._type,
+                                file_name: file_name.clone(),
+                                value: constant.1.value.clone(),
+                                name_no_format: name.to_string(),
+                            },
+                        ))
+                    };
+                }
+            }
+        }
+    }
+}
+
+pub fn split_const_line(line: &str) -> Vec<String> {
+    // iterate over chars, split by , ignore commas inside parentheses
+    let mut result = vec![];
+    let mut current: usize = 0;
+    let mut inside_parentheses = false;
+
+    for (i, c) in line.chars().enumerate() {
+        match c {
+            '(' => {
+                inside_parentheses = true;
+            }
+            ')' => {
+                inside_parentheses = false;
+            }
+            ',' => {
+                if !inside_parentheses {
+                    result.push(line[current..i].to_string());
+                    current = i + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if current < line.len() {
+        result.push(line[current..].to_string());
+    }
+
+    result
+}
+
 pub fn get_type(value: &str) -> Option<SymbolType> {
     if value.len() > 1 {
         if value.starts_with('$')
@@ -251,6 +317,7 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
             || value.ends_with('@')
             || value.ends_with("@s")
             || value.ends_with("@v")
+            || (value.ends_with(")") && value.contains("@(")) // arrays 0@(1@,2i)
         {
             return Some(SymbolType::Var);
         }
