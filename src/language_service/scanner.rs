@@ -345,7 +345,12 @@ pub fn process_var_declaration(
 ) {
     let mut tokens = line.split('=');
 
-    let Some(name) = tokens.next() else { return };
+    let Some(mut name) = tokens.next() else { return };
+
+    if let Some(pos) = name.find('[') {
+        name = &name[..pos];
+    }
+
     let name = name.trim();
     let name_lower = name.to_ascii_lowercase();
     if found_constants.iter().any(|(n, _)| n == &name_lower) {
