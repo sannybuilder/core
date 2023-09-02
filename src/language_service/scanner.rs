@@ -145,18 +145,80 @@ pub fn find_constants<'a>(
     reserved_words: &DictNumByStr,
     source: &Source,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
-    let mut lines = content.lines().enumerate();
+    let mut lines: Vec<String> = vec![];
+    let mut line = String::new();
+    let mut chars = content.chars();
+
+    'outer: while let Some(c) = chars.next() {
+        match c {
+            '\n' => {
+                lines.push(line);
+                line = String::new();
+            }
+            '{' => {
+                // { } block
+                loop {
+                    match chars.next() {
+                        Some('}') => break,
+                        Some(_) => {} // ignore other chars inside block
+                        None => break 'outer,
+                    }
+                }
+            }
+            '/' => match chars.next() {
+                // /* */ comment
+                Some('*') => loop {
+                    match chars.next() {
+                        Some('*') => {
+                            if chars.next() == Some('/') {
+                                break;
+                            }
+                        }
+                        Some(_) => {} // ignore other chars inside comment
+                        None => break 'outer,
+                    }
+                },
+                // // comment
+                Some('/') => {
+                    loop {
+                        match chars.next() {
+                            Some('\n') => {
+                                lines.push(line);
+                                line = String::new();
+                                break;
+                            }
+                            Some(_) => {} // ignore other chars inside comment
+                            None => break 'outer,
+                        }
+                    }
+                }
+                Some(c) => {
+                    line.push('/');
+                    line.push(c);
+                }
+                None => {
+                    break 'outer;
+                }
+            },
+
+            c => {
+                // trim left
+                if !c.is_ascii_whitespace() || !line.is_empty() {
+                    line.push(c);
+                }
+            }
+        }
+    }
+    lines.push(line);
+
+    // let mut lines = content.lines().enumerate();
     let mut found_constants = vec![];
     let mut inside_const = false;
     let file_name = match source {
         Source::File(path) => Some(path.clone()),
         Source::Memory => None,
     };
-    while let Some((line_number, mut line)) = lines.next() {
-        line = line.trim();
-        if line.contains("//") {
-            line = line.split("//").next().unwrap();
-        }
+    for (line_number, line) in lines.iter().enumerate() {
         if line.is_empty() {
             continue;
         }
@@ -181,24 +243,22 @@ pub fn find_constants<'a>(
                     } else {
                         inside_const = true;
                     }
-
                 }
                 TOKEN_END if inside_const => inside_const = false,
                 TOKEN_INT | TOKEN_FLOAT | TOKEN_STRING | TOKEN_LONGSTRING | TOKEN_HANDLE
                 | TOKEN_BOOL => {
                     // inline variable declaration
-                    let name = words.next().unwrap_or("");
-                    if !name.is_empty() {
-                        found_constants.push((
-                            name.to_ascii_lowercase(),
-                            SymbolInfoMap {
-                                line_number: line_number as u32,
-                                _type: SymbolType::Var,
-                                file_name: file_name.clone(),
-                                value: None,
-                                name_no_format: name.to_string(),
-                            },
-                        ))
+
+                    let rest = words.collect::<String>();
+                    let names = split_const_line(&rest);
+
+                    for name in names {
+                        process_var_declaration(
+                            &name,
+                            &mut found_constants,
+                            line_number,
+                            &file_name,
+                        )
                     }
                 }
                 _ => {}
@@ -232,50 +292,80 @@ pub fn process_const_declaration(
 ) {
     let mut tokens = line.split('=');
 
-    if let Some(name) = tokens.next() {
-        let name = name.trim();
-        let name_lower = name.to_ascii_lowercase();
-        if found_constants.iter().any(|(n, _)| n == &name_lower) {
-            log::debug!(
-                "Found duplicate const declaration {} in line {}",
-                name,
-                line_number + 1
-            );
-            return;
+    let Some(name) = tokens.next() else { return };
+    let name = name.trim();
+    let name_lower = name.to_ascii_lowercase();
+    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+        log::debug!(
+            "Found duplicate const declaration {} in line {}",
+            name,
+            line_number + 1
+        );
+        return;
+    }
+
+    let Some(value) = tokens.next() else { return };
+    let value = value.trim();
+
+    macro_rules! add_to_constants {
+        ($type:expr) => {
+            found_constants.push((
+                name_lower,
+                SymbolInfoMap {
+                    line_number: line_number as u32,
+                    _type: $type,
+                    file_name: file_name.clone(),
+                    value: Some(String::from(value)),
+                    name_no_format: name.to_string(),
+                },
+            ));
+        };
+    }
+
+    match get_type(value) {
+        Some(_type) => {
+            add_to_constants!(_type);
         }
-        if let Some(value) = tokens.next() {
-            let value = value.trim();
-            match get_type(value) {
-                Some(_type) => found_constants.push((
-                    name_lower,
-                    SymbolInfoMap {
-                        line_number: line_number as u32,
-                        _type,
-                        file_name: file_name.clone(),
-                        value: Some(String::from(value)),
-                        name_no_format: name.to_string(),
-                    },
-                )),
-                None => {
-                    if let Some(constant) = found_constants
-                        .iter()
-                        .find(|x| x.0 == value.to_ascii_lowercase())
-                    {
-                        found_constants.push((
-                            name_lower,
-                            SymbolInfoMap {
-                                line_number: line_number as u32,
-                                _type: constant.1._type,
-                                file_name: file_name.clone(),
-                                value: constant.1.value.clone(),
-                                name_no_format: name.to_string(),
-                            },
-                        ))
-                    };
-                }
-            }
+        None => {
+            if let Some((_, symbol)) = found_constants
+                .iter()
+                .find(|x| x.0 == value.to_ascii_lowercase())
+            {
+                add_to_constants!(symbol._type);
+            };
         }
     }
+}
+
+pub fn process_var_declaration(
+    line: &str,
+    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    line_number: usize,
+    file_name: &Option<String>,
+) {
+    let mut tokens = line.split('=');
+
+    let Some(name) = tokens.next() else { return };
+    let name = name.trim();
+    let name_lower = name.to_ascii_lowercase();
+    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+        log::debug!(
+            "Found duplicate const declaration {} in line {}",
+            name,
+            line_number + 1
+        );
+        return;
+    }
+    found_constants.push((
+        name.to_ascii_lowercase(),
+        SymbolInfoMap {
+            line_number: line_number as u32,
+            _type: SymbolType::Var,
+            file_name: file_name.clone(),
+            value: None,
+            name_no_format: name.to_string(),
+        },
+    ))
 }
 
 pub fn split_const_line(line: &str) -> Vec<String> {
