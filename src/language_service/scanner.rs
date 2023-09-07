@@ -223,8 +223,11 @@ pub fn find_constants<'a>(
             continue;
         }
         let mut words = line.split_ascii_whitespace();
-        let first = words.next().unwrap_or("");
-        match reserved_words.map.get(first) {
+        let first = match words.next() {
+            Some(word) => word.to_ascii_lowercase(),
+            None => continue,
+        };
+        match reserved_words.map.get(&first) {
             Some(token) => match *token {
                 TOKEN_CONST => {
                     let rest = words.collect::<String>();
