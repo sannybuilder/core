@@ -255,7 +255,7 @@ impl Namespaces {
                     match self.parse_method(line, name, &mut map) {
                         Some(_) => {}
                         None => {
-                            println!("Can't parse the line {}", line);
+                            log::debug!("Can't parse the line {}", line);
                         }
                     }
                 }

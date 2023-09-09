@@ -23,6 +23,7 @@ pub fn unary(s: Span) -> R<Node> {
         alt((
             map(variable::variable, |v| Node::Variable(v)),
             map(literal::number, |n| Node::Literal(n)),
+            map(literal::identifier, |n| Node::Literal(n)),
         )),
     ))(s)
 }
@@ -32,7 +33,7 @@ mod tests {
     use super::*;
     use crate::parser::parse;
     // #[test]
-    fn test_unary() {
+    fn test_unary_not() {
         let (_, ast) = parse("  ~1@  ").unwrap();
 
         assert_eq!(
@@ -65,5 +66,80 @@ mod tests {
                 })]
             }
         )
+    }
+
+    #[test]
+    fn test_unary_minus() {
+        let (_, ast) = parse("-10").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr {
+                    operator: Token {
+                        syntax_kind: SyntaxKind::OperatorMinus,
+                        start: 1,
+                        len: 1
+                    },
+                    operand: Box::new(Node::Literal(Token {
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                        start: 2,
+                        len: 2
+                    })),
+                    token: Token {
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                        start: 1,
+                        len: 3
+                    }
+                })]
+            }
+        );
+
+        let (_, ast) = parse("-10.23").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr {
+                    operator: Token {
+                        syntax_kind: SyntaxKind::OperatorMinus,
+                        start: 1,
+                        len: 1
+                    },
+                    operand: Box::new(Node::Literal(Token {
+                        syntax_kind: SyntaxKind::FloatLiteral,
+                        start: 2,
+                        len: 5
+                    })),
+                    token: Token {
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                        start: 1,
+                        len: 6
+                    }
+                })]
+            }
+        );
+
+        let (_, ast) = parse("-x").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr {
+                    operator: Token {
+                        syntax_kind: SyntaxKind::OperatorMinus,
+                        start: 1,
+                        len: 1
+                    },
+                    operand: Box::new(Node::Literal(Token {
+                        syntax_kind: SyntaxKind::Identifier,
+                        start: 2,
+                        len: 1
+                    })),
+                    token: Token {
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                        start: 1,
+                        len: 2
+                    }
+                })]
+            }
+        );
     }
 }

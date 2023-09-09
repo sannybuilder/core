@@ -72,22 +72,26 @@ pub unsafe extern "C" fn list_num_by_str_free(ptr: *mut ListNumByStr) {
 #[test]
 fn test_list_num_by_str_get_entry() {
     unsafe {
+        let comments = std::ffi::CString::new(";").unwrap();
+        let delimiter = std::ffi::CString::new(",=").unwrap();
         let f = list_num_by_str_new(
             Duplicates::Replace.into(),
             true,
-            pchar!(";"),
-            pchar!(",="),
+            comments.as_ptr(),
+            delimiter.as_ptr(),
             true,
         );
         assert!(f.as_mut().is_some());
         assert_eq!(f.as_ref().unwrap().config.case_format, CaseFormat::NoFormat);
 
-        let loaded = list_num_by_str_load_file(f, pchar!("src/dictionary/test/keywords-hex.txt"));
+        let file = std::ffi::CString::new("src/dictionary/test/keywords-hex.txt").unwrap();
+        let loaded = list_num_by_str_load_file(f, file.as_ptr());
         assert!(loaded);
 
-        let mut key = pchar!("");
+        let empty = std::ffi::CString::new("").unwrap();
+        // let mut key = pchar!("");
         let mut value = 0;
-        let res = list_num_by_str_get_entry(f, 1, &mut key, &mut value);
+        let res = list_num_by_str_get_entry(f, 1, &mut empty.as_ptr(), &mut value);
         assert!(res);
     }
 }

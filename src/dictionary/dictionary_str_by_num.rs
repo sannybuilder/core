@@ -136,19 +136,21 @@ mod tests {
     use super::*;
     #[test]
     fn test() {
+        let comments = std::ffi::CString::new(";").unwrap();
+        let delimiter = std::ffi::CString::new(",=").unwrap();
         unsafe {
             let f = dictionary_str_by_num_new(
                 Duplicates::Replace.into(),
                 false,
                 CaseFormat::NoFormat.into(),
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
 
             assert!(f.as_mut().is_some());
-            let loaded =
-                dictionary_str_by_num_load_file(f, pchar!("src/dictionary/test/keywords.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords.txt").unwrap();
+            let loaded = dictionary_str_by_num_load_file(f, file.as_ptr());
             assert!(loaded);
             assert_eq!(dictionary_str_by_num_get_count(f), 2);
         }
@@ -157,102 +159,122 @@ mod tests {
     #[test]
     fn test_dictionary_str_by_num_find_uppercase() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_str_by_num_new(
                 Duplicates::Replace.into(),
                 true,
                 CaseFormat::UpperCase.into(),
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
 
             assert!(f.as_mut().is_some());
-            let loaded =
-                dictionary_str_by_num_load_file(f, pchar!("src/dictionary/test/keywords-hex.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-hex.txt").unwrap();
+            let loaded = dictionary_str_by_num_load_file(f, file.as_ptr());
             assert!(loaded);
-            let mut s = pchar!("");
-            assert!(dictionary_str_by_num_find(f, 2, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "JUMP");
+            println!("{:?}", f.as_ref().unwrap().map);
 
-            assert!(!dictionary_str_by_num_find(f, 0, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "JUMP");
+            let mut ptr = 0;
+            use std::mem::transmute;
+
+            assert!(dictionary_str_by_num_find(f, 2, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "JUMP");
+
+            assert!(!dictionary_str_by_num_find(f, 0, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "JUMP");
         }
     }
 
     #[test]
     fn test_dictionary_str_by_num_find_lowercase() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_str_by_num_new(
                 Duplicates::Replace.into(),
                 true,
                 CaseFormat::LowerCase.into(),
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
 
             assert!(f.as_mut().is_some());
-            let loaded =
-                dictionary_str_by_num_load_file(f, pchar!("src/dictionary/test/keywords-hex.txt"));
+
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-hex.txt").unwrap();
+            let loaded = dictionary_str_by_num_load_file(f, file.as_ptr());
             assert!(loaded);
 
-            let mut s = pchar!("");
-            assert!(dictionary_str_by_num_find(f, 2, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "jump");
+            let mut ptr = 0;
+            use std::mem::transmute;
 
-            assert!(!dictionary_str_by_num_find(f, 0, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "jump");
+            assert!(dictionary_str_by_num_find(f, 2, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "jump");
+
+            assert!(!dictionary_str_by_num_find(f, 0, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "jump");
         }
     }
 
     #[test]
     fn test_dictionary_str_by_num_duplicates_ignore() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_str_by_num_new(
                 Duplicates::Ignore.into(),
                 true,
                 CaseFormat::NoFormat.into(),
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
 
             assert!(f.as_mut().is_some());
-            let loaded =
-                dictionary_str_by_num_load_file(f, pchar!("src/dictionary/test/keywords-dups.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-dups.txt").unwrap();
+            let loaded = dictionary_str_by_num_load_file(f, file.as_ptr());
             assert!(loaded);
-            let mut s = pchar!("");
-            assert!(dictionary_str_by_num_find(f, 1, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "wait");
 
-            assert!(dictionary_str_by_num_find(f, 2, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "jump");
+            let mut ptr = 0;
+            use std::mem::transmute;
+
+            assert!(dictionary_str_by_num_find(f, 1, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "wait");
+
+            assert!(dictionary_str_by_num_find(f, 2, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "jump");
         }
     }
 
     #[test]
     fn test_dictionary_str_by_num_duplicates_replace() {
         unsafe {
+            let comments = std::ffi::CString::new(";").unwrap();
+            let delimiter = std::ffi::CString::new(",=").unwrap();
             let f = dictionary_str_by_num_new(
                 Duplicates::Replace.into(),
                 true,
                 CaseFormat::NoFormat.into(),
-                pchar!(";"),
-                pchar!(",="),
+                comments.as_ptr(),
+                delimiter.as_ptr(),
                 true,
             );
 
             assert!(f.as_mut().is_some());
-            let loaded =
-                dictionary_str_by_num_load_file(f, pchar!("src/dictionary/test/keywords-dups.txt"));
+            let file = std::ffi::CString::new("src/dictionary/test/keywords-dups.txt").unwrap();
+            let loaded = dictionary_str_by_num_load_file(f, file.as_ptr());
             assert!(loaded);
 
-            let mut s = pchar!("");
-            assert!(dictionary_str_by_num_find(f, 1, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "jump");
+            let mut ptr = 0;
+            use std::mem::transmute;
 
-            assert!(dictionary_str_by_num_find(f, 2, &mut s));
-            assert_eq!(pchar_to_str(s).unwrap(), "jump");
+            assert!(dictionary_str_by_num_find(f, 1, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "jump");
+
+            assert!(dictionary_str_by_num_find(f, 2, transmute(&mut ptr)));
+            assert_eq!(pchar_to_str(transmute(ptr)).unwrap(), "jump");
         }
     }
 }

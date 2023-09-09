@@ -1,19 +1,9 @@
 use super::ffi::{Source, SymbolInfoMap, SymbolType};
 use crate::dictionary::dictionary_num_by_str::DictNumByStr;
 use crate::language_service::server::{CACHE_FILE_SYMBOLS, CACHE_FILE_TREE};
+use crate::utils::compiler_const::*;
 use std::fs;
 use std::path::Path;
-
-// from compiler.ini
-const TOKEN_INCLUDE: i32 = 103;
-const TOKEN_CONST: i32 = 65;
-const TOKEN_END: i32 = 255;
-const TOKEN_INT: i32 = 1;
-const TOKEN_FLOAT: i32 = 2;
-const TOKEN_STRING: i32 = 3;
-const TOKEN_LONGSTRING: i32 = 4;
-const TOKEN_HANDLE: i32 = 5;
-const TOKEN_BOOL: i32 = 6;
 
 fn document_tree_walk<'a>(
     content: &String,
@@ -155,63 +145,137 @@ pub fn find_constants<'a>(
     reserved_words: &DictNumByStr,
     source: &Source,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
-    let mut lines = content.lines().enumerate();
-    let mut res = vec![];
+    let mut lines: Vec<String> = vec![];
+    let mut line = String::new();
+    let mut chars = content.chars();
+
+    'outer: while let Some(c) = chars.next() {
+        match c {
+            '\n' => {
+                lines.push(line);
+                line = String::new();
+            }
+            '{' => {
+                // { } block
+                loop {
+                    match chars.next() {
+                        Some('}') => break,
+                        Some(_) => {} // ignore other chars inside block
+                        None => break 'outer,
+                    }
+                }
+            }
+            '/' => match chars.next() {
+                // /* */ comment
+                Some('*') => loop {
+                    match chars.next() {
+                        Some('*') => {
+                            if chars.next() == Some('/') {
+                                break;
+                            }
+                        }
+                        Some(_) => {} // ignore other chars inside comment
+                        None => break 'outer,
+                    }
+                },
+                // // comment
+                Some('/') => {
+                    loop {
+                        match chars.next() {
+                            Some('\n') => {
+                                lines.push(line);
+                                line = String::new();
+                                break;
+                            }
+                            Some(_) => {} // ignore other chars inside comment
+                            None => break 'outer,
+                        }
+                    }
+                }
+                Some(c) => {
+                    line.push('/');
+                    line.push(c);
+                }
+                None => {
+                    break 'outer;
+                }
+            },
+
+            c => {
+                // trim left
+                if !c.is_ascii_whitespace() || !line.is_empty() {
+                    line.push(c);
+                }
+            }
+        }
+    }
+    lines.push(line);
+
+    // let mut lines = content.lines().enumerate();
+    let mut found_constants = vec![];
     let mut inside_const = false;
     let file_name = match source {
         Source::File(path) => Some(path.clone()),
         Source::Memory => None,
     };
-    while let Some((line_number, mut line)) = lines.next() {
-        line = line.trim();
-        if line.contains("//") {
-            line = line.split("//").next().unwrap();
-        }
+    for (line_number, line) in lines.iter().enumerate() {
         if line.is_empty() {
             continue;
         }
         let mut words = line.split_ascii_whitespace();
-        let first = words.next().unwrap_or("");
-        match reserved_words.map.get(first) {
+        let first = match words.next() {
+            Some(word) => word.to_ascii_lowercase(),
+            None => continue,
+        };
+        match reserved_words.map.get(&first) {
             Some(token) => match *token {
-                TOKEN_CONST => inside_const = true,
+                TOKEN_CONST => {
+                    let rest = words.collect::<String>();
+
+                    if !rest.is_empty() {
+                        let declarations = split_const_line(&rest);
+
+                        for declaration in declarations.iter() {
+                            process_const_declaration(
+                                &declaration,
+                                &mut found_constants,
+                                line_number,
+                                &file_name,
+                            );
+                        }
+                    } else {
+                        inside_const = true;
+                    }
+                }
                 TOKEN_END if inside_const => inside_const = false,
                 TOKEN_INT | TOKEN_FLOAT | TOKEN_STRING | TOKEN_LONGSTRING | TOKEN_HANDLE
                 | TOKEN_BOOL => {
                     // inline variable declaration
-                    let name = words.next().unwrap_or("");
-                    if !name.is_empty() {
-                        res.push((
-                            name.to_ascii_lowercase(),
-                            SymbolInfoMap {
-                                line_number: line_number as u32,
-                                _type: SymbolType::Var,
-                                file_name: file_name.clone(),
-                                value: None,
-                            },
-                        ))
+
+                    let rest = words.collect::<String>();
+                    let names = split_const_line(&rest);
+
+                    for name in names {
+                        process_var_declaration(
+                            &name,
+                            &mut found_constants,
+                            line_number,
+                            &file_name,
+                        )
                     }
                 }
                 _ => {}
             },
             _ if inside_const => {
-                // todo: try nom parser
-                let mut tokens = line.split('=');
+                let declarations = split_const_line(line);
 
-                if let Some(name) = tokens.next() {
-                    if let Some(value) = tokens.next() {
-                        if let Some(_type) = get_type(value.trim()) {
-                            res.push((
-                                name.trim().to_ascii_lowercase(),
-                                SymbolInfoMap {
-                                    line_number: line_number as u32,
-                                    _type,
-                                    file_name: file_name.clone(),
-                                    value: Some(String::from(value.trim())),
-                                },
-                            ))
-                        }
-                    }
+                for declaration in declarations.iter() {
+                    process_const_declaration(
+                        &declaration,
+                        &mut found_constants,
+                        line_number,
+                        &file_name,
+                    );
                 }
             }
             _ => {
@@ -220,7 +284,127 @@ pub fn find_constants<'a>(
         }
     }
 
-    Some(res)
+    Some(found_constants)
+}
+
+pub fn process_const_declaration(
+    line: &str,
+    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    line_number: usize,
+    file_name: &Option<String>,
+) {
+    let mut tokens = line.split('=');
+
+    let Some(name) = tokens.next() else { return };
+    let name = name.trim();
+    let name_lower = name.to_ascii_lowercase();
+    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+        log::debug!(
+            "Found duplicate const declaration {} in line {}",
+            name,
+            line_number + 1
+        );
+        return;
+    }
+
+    let Some(value) = tokens.next() else { return };
+    let value = value.trim();
+
+    macro_rules! add_to_constants {
+        ($type:expr) => {
+            found_constants.push((
+                name_lower,
+                SymbolInfoMap {
+                    line_number: line_number as u32,
+                    _type: $type,
+                    file_name: file_name.clone(),
+                    value: Some(String::from(value)),
+                    name_no_format: name.to_string(),
+                },
+            ));
+        };
+    }
+
+    match get_type(value) {
+        Some(_type) => {
+            add_to_constants!(_type);
+        }
+        None => {
+            if let Some((_, symbol)) = found_constants
+                .iter()
+                .find(|x| x.0 == value.to_ascii_lowercase())
+            {
+                add_to_constants!(symbol._type);
+            };
+        }
+    }
+}
+
+pub fn process_var_declaration(
+    line: &str,
+    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    line_number: usize,
+    file_name: &Option<String>,
+) {
+    let mut tokens = line.split('=');
+
+    let Some(mut name) = tokens.next() else { return };
+
+    if let Some(pos) = name.find('[') {
+        name = &name[..pos];
+    }
+
+    let name = name.trim();
+    let name_lower = name.to_ascii_lowercase();
+    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+        log::debug!(
+            "Found duplicate const declaration {} in line {}",
+            name,
+            line_number + 1
+        );
+        return;
+    }
+    found_constants.push((
+        name.to_ascii_lowercase(),
+        SymbolInfoMap {
+            line_number: line_number as u32,
+            _type: SymbolType::Var,
+            file_name: file_name.clone(),
+            value: None,
+            name_no_format: name.to_string(),
+        },
+    ))
+}
+
+pub fn split_const_line(line: &str) -> Vec<String> {
+    // iterate over chars, split by , ignore commas inside parentheses
+    let mut result = vec![];
+    let mut current: usize = 0;
+    let mut inside_parentheses = false;
+
+    for (i, c) in line.chars().enumerate() {
+        match c {
+            '(' => {
+                inside_parentheses = true;
+            }
+            ')' => {
+                inside_parentheses = false;
+            }
+            ',' => {
+                if !inside_parentheses {
+                    result.push(line[current..i].to_string());
+                    current = i + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if current < line.len() {
+        result.push(line[current..].to_string());
+    }
+
+    result
 }
 
 pub fn get_type(value: &str) -> Option<SymbolType> {
@@ -231,6 +415,7 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
             || value.ends_with('@')
             || value.ends_with("@s")
             || value.ends_with("@v")
+            || (value.ends_with(")") && value.contains("@(")) // arrays 0@(1@,2i)
         {
             return Some(SymbolType::Var);
         }
@@ -247,7 +432,7 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
     if let Some(_) = value.parse::<f32>().ok() {
         return Some(SymbolType::Number);
     }
-    if value.starts_with("0x") || value.starts_with("-0x") {
+    if value.starts_with("0x") || value.starts_with("-0x") || value.starts_with("+0x") {
         return Some(SymbolType::Number);
     }
     return None;

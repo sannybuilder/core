@@ -1,4 +1,5 @@
 use nom::bytes::complete::tag;
+use nom::bytes::complete::tag_no_case;
 use nom::character::complete::alpha1;
 use nom::character::complete::alphanumeric1;
 use nom::character::complete::char;
@@ -18,7 +19,7 @@ use nom::{branch::alt, character::complete::hex_digit1};
 use crate::parser::interface::*;
 
 pub fn number(s: Span) -> R<Token> {
-    alt((float, decimal))(s)
+    alt((hexadecimal, float, decimal))(s)
 }
 
 // combination of letters, digits and underscore, not starting with a digit
@@ -52,8 +53,11 @@ pub fn decimal_span(s: Span) -> R<Span> {
     recognize(digit1)(s)
 }
 
-fn hexadecimal_span(s: Span) -> R<Span> {
-    preceded(alt((tag("0x"), tag("0X"))), recognize(hex_digit1))(s)
+pub fn hexadecimal(s: Span) -> R<Token> {
+    map(
+        recognize(pair(tag_no_case("0x"), hex_digit1)), 
+        |s| Token::from(s, SyntaxKind::IntegerLiteral)
+    )(s)
 }
 
 pub fn float_span(s: Span) -> R<Span> {

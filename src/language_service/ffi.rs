@@ -31,6 +31,7 @@ pub struct SymbolInfoMap {
     pub line_number: u32,
     pub _type: SymbolType,
     pub value: Option<String>,
+    pub name_no_format: String, // used for autocomplete
 }
 #[repr(C)]
 #[derive(Clone, Copy)]

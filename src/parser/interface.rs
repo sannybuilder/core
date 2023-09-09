@@ -1,6 +1,6 @@
 use nom::IResult;
 use nom_locate::LocatedSpan;
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SyntaxKind {
     Identifier,
     IntegerLiteral,
@@ -15,38 +15,41 @@ pub enum SyntaxKind {
     ConstDeclaration,
     ConstInitialization,
 
-    OperatorBitwiseNot,      // ~
-    OperatorBitwiseAnd,      // &
-    OperatorBitwiseOr,       // |
-    OperatorBitwiseXor,      // ^
-    OperatorBitwiseMod,      // %
-    OperatorBitwiseShr,      // >>
-    OperatorBitwiseShl,      // <<
-    OperatorPlus,            // +
-    OperatorMinus,           // -
-    OperatorMul,             // *
-    OperatorDiv,             // /
-    OperatorEqual,           // =
-    OperatorEqualEqual,      // ==
-    OperatorLessGreater,     // <>
-    OperatorBitwiseNotEqual, // ~=
-    OperatorBitwiseAndEqual, // &=
-    OperatorBitwiseOrEqual,  // |=
-    OperatorBitwiseXorEqual, // ^=
-    OperatorBitwiseModEqual, // %=
-    OperatorBitwiseShrEqual, // >>=
-    OperatorBitwiseShlEqual, // <<=
-    OperatorPlusEqual,       // +=
-    OperatorMinusEqual,      // -=
-    OperatorMulEqual,        // *=
-    OperatorDivEqual,        // /=
-    OperatorGreater,         // >
-    OperatorGreaterEqual,    // >=
-    OperatorLess,            // <
-    OperatorLessEqual,       // <=
+    OperatorBitwiseNot,            // ~
+    OperatorBitwiseAnd,            // &
+    OperatorBitwiseOr,             // |
+    OperatorBitwiseXor,            // ^
+    OperatorBitwiseMod,            // %
+    OperatorBitwiseShr,            // >>
+    OperatorBitwiseShl,            // <<
+    OperatorPlus,                  // +
+    OperatorMinus,                 // -
+    OperatorMul,                   // *
+    OperatorDiv,                   // /
+    OperatorEqual,                 // =
+    OperatorEqualEqual,            // ==
+    OperatorLessGreater,           // <>
+    OperatorBitwiseNotEqual,       // ~=
+    OperatorBitwiseAndEqual,       // &=
+    OperatorBitwiseOrEqual,        // |=
+    OperatorBitwiseXorEqual,       // ^=
+    OperatorBitwiseModEqual,       // %=
+    OperatorBitwiseShrEqual,       // >>=
+    OperatorBitwiseShlEqual,       // <<=
+    OperatorPlusEqual,             // +=
+    OperatorMinusEqual,            // -=
+    OperatorMulEqual,              // *=
+    OperatorDivEqual,              // /=
+    OperatorGreater,               // >
+    OperatorGreaterEqual,          // >=
+    OperatorLess,                  // <
+    OperatorLessEqual,             // <=
+    OperatorTimedAdditionEqual,    // +=@
+    OperatorTimedSubtractionEqual, // -=@
+    OperatorCastEqual,             // =#
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub syntax_kind: SyntaxKind,
     pub start: usize,
@@ -63,7 +66,7 @@ impl Token {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Node {
     /// Integer or Float literal
     Literal(Token),
@@ -76,13 +79,13 @@ pub enum Node {
     ConstDeclaration(ConstDeclaration),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Variable {
     Global(SingleVariable),
     Local(SingleVariable),
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
-    Adma(SingleVariable)
+    Adma(SingleVariable),
 }
 
 impl Variable {
@@ -105,7 +108,7 @@ impl Variable {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct BinaryExpr {
     pub left: Box<Node>,
     pub operator: Token,
@@ -113,7 +116,7 @@ pub struct BinaryExpr {
     pub token: Token,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct UnaryPrefixExpr {
     pub operator: Token,
     pub operand: Box<Node>,
@@ -132,7 +135,7 @@ impl BinaryExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ArrayElementSCR {
     pub array_var: Box<Variable>,
     pub index_var: Box<Variable>,
@@ -141,14 +144,14 @@ pub struct ArrayElementSCR {
     pub token: Token,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IndexedVariable {
     pub var: Box<Variable>,
     pub index: Box<Node>,
     pub token: Token,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SingleVariable {
     /// identifier portion of the variable (10, var)
     pub name: Token,
@@ -158,19 +161,19 @@ pub struct SingleVariable {
     pub _type: VariableType,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ConstDeclaration {
     pub items: Vec<ConstInitialization>,
     pub token: Token,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ConstInitialization {
     pub name: Token,
     pub value: Box<Node>,
     pub token: Token,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum VariableType {
     Unknown,
     Int,         // i

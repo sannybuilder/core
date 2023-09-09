@@ -201,7 +201,7 @@ fn enum_value(input: &str) -> IResult<&str, EnumItemValueRaw> {
 }
 
 fn number(input: &str) -> IResult<&str, EnumItemValueRaw> {
-    let (input, d) = recognize(tuple((opt(one_of("+-")),digit1)))(input)?;
+    let (input, d) = recognize(tuple((opt(one_of("+-")), digit1)))(input)?;
     match i32::from_str_radix(d, 10) {
         Ok(d) => Ok((input, EnumItemValueRaw::Int(d))),
         _ => Err(nom::Err::Error(nom::error::Error {

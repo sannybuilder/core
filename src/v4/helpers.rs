@@ -1,4 +1,4 @@
-use crate::parser::interface::*;
+use crate::{legacy_ini::OpcodeTable, namespaces::namespaces::OpId, parser::interface::*};
 
 pub fn is_unary(node: &Node) -> bool {
     as_unary(node).is_some()
@@ -52,23 +52,90 @@ pub fn as_token(node: &Node) -> Option<&Token> {
     }
 }
 
-pub fn format_unary(command_name: &str, operand: &str) -> Option<String> {
-    [command_name, operand].join(" ").into()
+pub fn is_identifier(node: &Node) -> bool {
+    as_identifier(&node).is_some()
 }
 
-pub fn format_binary(command_name: &str, operand1: &str, operand2: &str) -> Option<String> {
-    [command_name, operand1, operand2].join(" ").into()
+pub fn as_identifier(node: &Node) -> Option<&Token> {
+    match node {
+        Node::Literal(t) if t.syntax_kind == SyntaxKind::Identifier => Some(t),
+        Node::Unary(e) if e.get_operator() == &SyntaxKind::OperatorMinus => {
+            as_identifier(&e.operand)
+        }
+        _ => None,
+    }
+}
+
+pub fn is_number(node: &Node) -> bool {
+    as_number(&node).is_some()
+}
+
+pub fn as_number(node: &Node) -> Option<&Token> {
+    match node {
+        Node::Literal(t)
+            if matches!(
+                t.syntax_kind,
+                SyntaxKind::IntegerLiteral | SyntaxKind::FloatLiteral
+            ) =>
+        {
+            Some(t)
+        }
+        Node::Unary(e) if e.get_operator() == &SyntaxKind::OperatorMinus => as_number(&e.operand),
+        _ => None,
+    }
+}
+
+pub fn format_unary(op: OpId, dest_var: &str) -> Option<String> {
+    format!("{:04X}: {dest_var}", op).into()
+}
+
+pub fn format_binary(
+    op: OpId,
+    dest_var: &str,
+    operand: &str,
+    legacy_ini: &OpcodeTable,
+) -> Option<String> {
+    let param_count = legacy_ini.get_params_count(op);
+    // get the index of the last parameter
+    let var_index = legacy_ini.get_param_real_index(op, (param_count - 1) as usize);
+    if var_index + 1 == param_count {
+        // if variable is the last parameter, then this is SCR mode
+        format_binary_no_reorder(op, operand, dest_var)
+    } else {
+        format_binary_no_reorder(op, dest_var, operand)
+    }
+}
+
+pub fn format_binary_no_reorder(op: OpId, operand1: &str, operand2: &str) -> Option<String> {
+    format!("{:04X}: {operand1} {operand2}", op).into()
 }
 
 pub fn format_ternary(
-    command_name: &str,
+    op: OpId,
+    dest_var: &str,
+    operand1: &str,
+    operand2: &str,
+    legacy_ini: &OpcodeTable,
+) -> Option<String> {
+    let param_count = legacy_ini.get_params_count(op);
+    // get the index of the last parameter
+    let var_index = legacy_ini.get_param_real_index(op, (param_count - 1) as usize);
+
+    if var_index + 1 == param_count {
+        // if variable is the last parameter, then this is SCR mode
+        format_ternary_no_reorder(op, operand1, operand2, dest_var)
+    } else {
+        format_ternary_no_reorder(op, dest_var, operand1, operand2)
+    }
+}
+
+pub fn format_ternary_no_reorder(
+    op: OpId,
     operand1: &str,
     operand2: &str,
     operand3: &str,
 ) -> Option<String> {
-    [command_name, operand1, operand2, operand3]
-        .join(" ")
-        .into()
+    format!("{:04X}: {operand1} {operand2} {operand3}", op).into()
 }
 
 pub fn token_str<'a>(s: &'a str, token: &Token) -> &'a str {

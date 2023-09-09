@@ -83,4 +83,20 @@ mod tests {
         // does not support directives yet
         assert!(parse("1{$123}").is_err());
     }
+
+    #[test]
+    fn test_hex() {
+        let (_, ast) = parse("0x100").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 1,
+                    len: 5,
+                    syntax_kind: SyntaxKind::IntegerLiteral
+                })]
+            }
+        );
+    }
+
 }

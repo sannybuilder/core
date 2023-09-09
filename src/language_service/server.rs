@@ -129,7 +129,7 @@ impl LanguageServer {
                 .filter_map(|(name, map)| {
                     name.to_ascii_lowercase()
                         .starts_with(&needle)
-                        .then_some((name.clone(), map.value.clone()?.clone()))
+                        .then_some((map.name_no_format.clone(), map.value.clone()?.clone()))
                 })
                 .collect::<Vec<_>>(),
         )
