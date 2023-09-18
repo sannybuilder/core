@@ -24,10 +24,15 @@ fn main() {
         .set_thread_level(LevelFilter::Off)
         .build();
 
+    let cwd = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf();
     let _ = WriteLogger::init(
         LevelFilter::max(),
         config,
-        std::fs::File::create("core.log").unwrap(),
+        std::fs::File::create(cwd.join("core.log")).unwrap(),
     );
 
     log::info!("core library loaded");
