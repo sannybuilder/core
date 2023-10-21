@@ -99,4 +99,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_label() {
+        let (_, ast) = parse("@label123").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 1,
+                    len: 9,
+                    syntax_kind: SyntaxKind::LabelLiteral
+                })]
+            }
+        );
+    }
+
 }

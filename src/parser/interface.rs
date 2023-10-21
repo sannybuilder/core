@@ -5,6 +5,7 @@ pub enum SyntaxKind {
     Identifier,
     IntegerLiteral,
     FloatLiteral,
+    LabelLiteral,
     ArrayElementSCR,
     IndexedVariable,
     LocalVariable,

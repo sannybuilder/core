@@ -73,7 +73,9 @@ pub fn try_tranform(
     macro_rules! resolve {
         ($node: expr) => {{
             let x = |token| -> Option<(Node, String)> {
-                let name = token_str(expr, token);
+                // keys in DictStrByStr are lower-case
+                let name = token_str(expr, token).to_ascii_lowercase();
+
                 let const_value = const_lookup
                     .map
                     .get(&CString::new(name).unwrap())
@@ -395,9 +397,10 @@ pub fn try_tranform(
                             let right_number = as_number(&right_operand)?;
 
                             match right_number.syntax_kind {
-                                
                                 // var = int
-                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                SyntaxKind::IntegerLiteral | SyntaxKind::LabelLiteral
+                                    if left_var.is_global() =>
+                                {
                                     op(OP_SET_VAR_INT)
                                 }
                                 // var = float
@@ -405,7 +408,9 @@ pub fn try_tranform(
                                     op(OP_SET_VAR_FLOAT)
                                 }
                                 // lvar = int
-                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                SyntaxKind::IntegerLiteral | SyntaxKind::LabelLiteral
+                                    if left_var.is_local() =>
+                                {
                                     op(OP_SET_LVAR_INT).or(op(OP_SET_VAR_INT))
                                 }
                                 // lvar = float

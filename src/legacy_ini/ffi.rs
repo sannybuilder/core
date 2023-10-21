@@ -50,6 +50,7 @@ pub unsafe extern "C" fn legacy_ini_get_max_opcode(table: *mut OpcodeTable) -> u
 
 #[no_mangle]
 pub unsafe extern "C" fn legacy_ini_get_params_count(table: *mut OpcodeTable, opcode: u16) -> u8 {
+    // todo: make this command fallible https://github.com/sannybuilder/dev/issues/150
     (*table).get_params_count(opcode)
 }
 
