@@ -98,6 +98,9 @@ pub struct Attr {
     pub is_unsupported: bool,
     #[serde(default)]
     pub is_variadic: bool,
+
+    #[serde(default)]
+    pub is_getter: bool, // this field is not present in the original json
 }
 
 #[derive(Deserialize, Debug)]

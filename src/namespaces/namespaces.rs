@@ -684,6 +684,7 @@ impl Namespaces {
         self.props.contains(&prop_name.to_ascii_lowercase())
     }
 
+    // load a JSON from SBL
     pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = fs::read_to_string(file_name).ok()?;
 
@@ -691,7 +692,7 @@ impl Namespaces {
 
         self.library_version = CString::new(lib.meta.version).ok()?;
 
-        for command in lib
+        for mut command in lib
             .extensions
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
@@ -699,6 +700,7 @@ impl Namespaces {
         {
             self.short_descriptions
                 .insert(command.id, CString::new(command.short_desc).ok()?);
+            command.attrs.is_getter = !command.output.is_empty();
             self.attrs.insert(command.id, command.attrs);
             self.map_op_by_command_name
                 .insert(command.name.to_ascii_lowercase(), command.id);
@@ -752,5 +754,9 @@ impl Namespaces {
             dict.add(key, *op as _);
         }
         Some(())
+    }
+
+    pub fn is_getter<'a>(&self, id: OpId) -> Option<bool> {
+        self.attrs.get(&id).map(|attrs| attrs.is_getter)
     }
 }

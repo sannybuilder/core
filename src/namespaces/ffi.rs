@@ -30,7 +30,7 @@ pub unsafe extern "C" fn classes_load_library(ns: *mut Namespaces, file_name: PC
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_short_description_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn classes_get_short_description_by_id(
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_is_condition_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut bool,
 ) -> bool {
     boolclosure! {{
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn classes_get_is_condition_by_id(
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_is_branch_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut bool,
 ) -> bool {
     boolclosure! {{
@@ -303,6 +303,18 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
 pub unsafe extern "C" fn classes_get_library_version(ns: *mut Namespaces, out: *mut PChar) -> bool {
     boolclosure! {{
         *out = ns.as_mut()?.get_library_version().as_ptr();
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_is_getter_by_id(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    out: *mut bool,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.is_getter(opcode)?;
         Some(())
     }}
 }
