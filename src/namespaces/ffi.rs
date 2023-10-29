@@ -409,7 +409,7 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_some());
         assert_eq!(f.classes_count(), 11);
-        assert_eq!(f.op_count(), 189);
+        assert_eq!(f.op_count(), 162);
     }
 
     #[test]
