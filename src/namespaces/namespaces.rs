@@ -675,7 +675,7 @@ impl Namespaces {
             }
             let op = self.get_opcode_by_index(*index)?;
 
-            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ op.op_type == OpcodeType::Property
+            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ self.is_constructor(op.id).unwrap_or(false)
             {
                 return None;
             };
