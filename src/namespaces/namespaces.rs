@@ -373,8 +373,12 @@ impl Namespaces {
             map.insert(String::from(key).to_ascii_lowercase(), op_index);
             self.props.push(name.to_ascii_lowercase());
 
-            if op_type == OpcodeType::Property {
-                // add a method version of this opcode with all params
+            if self.is_constructor(id).unwrap_or(false) {
+                // sb3 quirk
+                // constructors can be written in two ways:
+                // Player.Create($PLAYER_CHAR, #NULL, 2488.5601, -1666.84, 13.38)
+                // $PLAYER_CHAR = Player.Create(#NULL, 2488.5601, -1666.84, 13.38)
+                // hence we need to add a method version of this opcode with all params
                 let op_index = self.register_opcode(Opcode {
                     hint: self.params_to_string(&params)?,
                     params_len: params.len() as i32,
@@ -719,6 +723,10 @@ impl Namespaces {
 
     pub fn is_condition<'a>(&self, id: OpId) -> Option<bool> {
         self.attrs.get(&id).map(|attrs| attrs.is_condition)
+    }
+
+    pub fn is_constructor<'a>(&self, id: OpId) -> Option<bool> {
+        self.attrs.get(&id).map(|attrs| attrs.is_constructor)
     }
 
     pub fn is_branch<'a>(&self, id: OpId) -> Option<bool> {
