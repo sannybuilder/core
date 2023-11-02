@@ -1,7 +1,7 @@
 use std::ffi::CString;
 
 use super::table::*;
-use crate::common_ffi::*;
+use crate::{common_ffi::*, namespaces::namespaces::Namespaces};
 
 #[no_mangle]
 pub extern "C" fn legacy_ini_new(game: u8) -> *mut OpcodeTable {
@@ -28,6 +28,26 @@ pub unsafe extern "C" fn legacy_ini_load_file(table: *mut OpcodeTable, path: PCh
                 )
             } else {
                 log::debug!("File {path} already loaded");
+            }
+            Some(())
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn legacy_ini_load_from_library(
+    table: *mut OpcodeTable,
+    ns: *mut Namespaces,
+) -> bool {
+    boolclosure!({
+        {
+            let ns = ns.as_mut()?;
+            if (*table).load_from_json(&ns.commands) {
+                log::debug!(
+                    "Successfully converted library definitions to legacy INI. Max opcode: {:04X}, Count: {}",
+                    (*table).get_max_opcode(),
+                    (*table).len()
+                )
             }
             Some(())
         }

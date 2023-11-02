@@ -308,13 +308,25 @@ pub unsafe extern "C" fn classes_get_library_version(ns: *mut Namespaces, out: *
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn classes_get_is_getter_by_id(
+pub unsafe extern "C" fn classes_get_input_count_by_id(
     ns: *mut Namespaces,
     opcode: OpId,
-    out: *mut bool,
+    out: *mut usize,
 ) -> bool {
     boolclosure! {{
-        *out = ns.as_mut()?.is_getter(opcode)?;
+        *out = ns.as_mut()?.get_input_count(opcode)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_output_count_by_id(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    out: *mut usize,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_output_count(opcode)?;
         Some(())
     }}
 }

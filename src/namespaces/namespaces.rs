@@ -7,7 +7,7 @@ use crate::dictionary::{
     list_num_by_str::ListNumByStr,
 };
 
-use super::library::{Attr, Library};
+use super::library::{Command, Library};
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -24,7 +24,7 @@ pub struct Namespaces {
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
     short_descriptions: HashMap<OpId, /*short_desc*/ CString>,
-    attrs: HashMap<OpId, Attr>,
+    pub commands: HashMap<OpId, Command>,
     map_op_by_id: HashMap<OpId, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -126,7 +126,7 @@ impl Namespaces {
             opcodes: vec![],
             enums: vec![],
             short_descriptions: HashMap::new(),
-            attrs: HashMap::new(),
+            commands: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_op_by_command_name: HashMap::new(),
@@ -352,7 +352,7 @@ impl Namespaces {
                 params.iter().cloned().collect::<Vec<_>>()
             };
 
-            let op_index = self.register_opcode(Opcode {
+            let op = Opcode {
                 hint: self.params_to_string(&params)?,
                 params_len: prop_params.len() as i32,
                 id,
@@ -364,7 +364,9 @@ impl Namespaces {
                 prop_type: OpcodeType::Property,
                 operation: CString::new(operation).ok()?,
                 short_desc: short_desc.clone(),
-            });
+            };
+            let supports_alternate_method_syntax = self.supports_alternate_method_syntax(&op);
+            let op_index = self.register_opcode(op);
             let key = PropKey {
                 name,
                 prop_pos,
@@ -373,7 +375,7 @@ impl Namespaces {
             map.insert(String::from(key).to_ascii_lowercase(), op_index);
             self.props.push(name.to_ascii_lowercase());
 
-            if self.is_constructor(id).unwrap_or(false) {
+            if supports_alternate_method_syntax {
                 // sb3 quirk
                 // constructors can be written in two ways:
                 // Player.Create($PLAYER_CHAR, #NULL, 2488.5601, -1666.84, 13.38)
@@ -675,13 +677,17 @@ impl Namespaces {
             }
             let op = self.get_opcode_by_index(*index)?;
 
-            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ self.is_constructor(op.id).unwrap_or(false)
+            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ self.supports_alternate_method_syntax(op)
             {
                 return None;
             };
 
             Some((CString::new(member.clone()).ok()?, &*op as *const _ as i32))
         }).collect::<Vec<_>>())
+    }
+    
+    fn supports_alternate_method_syntax(&self, op: &Opcode) -> bool {
+        op.op_type == OpcodeType::Property //&& self.is_constructor(op.id).unwrap_or(false)
     }
 
     pub fn has_prop(&self, prop_name: &str) -> bool {
@@ -696,18 +702,17 @@ impl Namespaces {
 
         self.library_version = CString::new(lib.meta.version).ok()?;
 
-        for mut command in lib
+        for command in lib
             .extensions
             .into_iter()
             .flat_map(|ext| ext.commands.into_iter())
             .filter(|c| !c.attrs.is_unsupported)
         {
             self.short_descriptions
-                .insert(command.id, CString::new(command.short_desc).ok()?);
-            command.attrs.is_getter = !command.output.is_empty();
-            self.attrs.insert(command.id, command.attrs);
+                .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
             self.map_op_by_command_name
                 .insert(command.name.to_ascii_lowercase(), command.id);
+            self.commands.insert(command.id, command);
         }
         Some(())
     }
@@ -722,15 +727,15 @@ impl Namespaces {
     }
 
     pub fn is_condition<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_condition)
+        self.commands.get(&id).map(|c| c.attrs.is_condition)
     }
 
     pub fn is_constructor<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_constructor)
+        self.commands.get(&id).map(|c| c.attrs.is_constructor)
     }
 
     pub fn is_branch<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_branch)
+        self.commands.get(&id).map(|c| c.attrs.is_branch)
     }
 
     pub fn get_library_version(&self) -> &CString {
@@ -764,7 +769,11 @@ impl Namespaces {
         Some(())
     }
 
-    pub fn is_getter<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_getter)
+    pub fn get_input_count<'a>(&self, id: OpId) -> Option<usize> {
+        self.commands.get(&id).map(|c| c.input.len())
+    }
+
+    pub fn get_output_count<'a>(&self, id: OpId) -> Option<usize> {
+        self.commands.get(&id).map(|c| c.output.len())
     }
 }

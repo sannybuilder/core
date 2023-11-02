@@ -14,6 +14,8 @@ use nom_locate::LocatedSpan;
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use crate::namespaces::{Command, CommandParamType, OpId, Operator};
+
 type Span<'a> = LocatedSpan<&'a str>;
 type R<'a, T> = IResult<Span<'a>, T>;
 
@@ -43,7 +45,7 @@ pub enum ParamType {
     Byte128 = 8, // only SA
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Game {
     GTA3,
     VC,
@@ -63,15 +65,25 @@ impl From<u8> for Game {
             4 => Game::VCS,
             5 => Game::SAMOBILE,
             _ => {
-                log::error!("Unknown game: {game}, using SA as the default value");
-                Game::SA
+                log::error!(
+                    "Unknown game: {game}, using default value {:?}",
+                    Game::default()
+                );
+                Default::default()
             }
         }
     }
 }
 
+impl Default for Game {
+    fn default() -> Self {
+        Game::SA
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct OpcodeTable {
+    game: Game,
     opcodes: HashMap<u16, Opcode>,
     files: Vec<String>,
     date: Option<String>,
@@ -233,7 +245,8 @@ pub fn decimal_span(s: Span) -> R<Span> {
 impl OpcodeTable {
     pub fn new(game: Game) -> Self {
         OpcodeTable {
-            max_params: get_game_limit(game),
+            max_params: get_game_limit(&game),
+            game,
             ..Default::default()
         }
     }
@@ -254,6 +267,143 @@ impl OpcodeTable {
         for line in content.lines() {
             self.parse_line(line);
         }
+        return true;
+    }
+
+    fn get_word_for_param(&self, word_index: usize, param_name: &str, c: &Command) -> CString {
+        let mut word = String::new();
+
+        if word_index == 0 {
+            if c.attrs.is_condition {
+                word.push_str("  ");
+            }
+
+            match c.operator {
+                Some(op) if c.input.len() == 1 && c.output.is_empty() => {
+                    // [unary operator]var
+                    word.push_str(op.into()); // add unary operator
+                }
+                Some(op) if op.is_bitwise() | self.is_ternary_command(c) => {
+                    // bitwise & ternary ops don't need keywords
+                }
+                _ => {
+                    word.push_str(c.name.to_lowercase().as_str());
+                }
+            };
+            return CString::new(word).unwrap();
+        }
+
+        if c.operator.is_some() {
+            word.push(' ');
+
+            if self.is_ternary_command(c) {
+                // [var] = [op1] [operator] [op2]
+                if word_index == 1 {
+                    word.push_str(Operator::Assignment.into());
+                }
+                if word_index == 2 {
+                    let op: &str = c.operator.unwrap().into();
+                    word.push_str(op);
+                }
+            } else {
+                // var [operator] [op1]
+                match c.operator {
+                    Some(op) => match op {
+                        Operator::Assignment
+                        | Operator::TimedAddition
+                        | Operator::TimedSubtraction
+                        | Operator::CastAssignment
+                        | Operator::IsEqualTo
+                        | Operator::IsGreaterThan
+                        | Operator::IsGreaterOrEqualTo => word.push_str(op.into()),
+                        Operator::Not => {
+                            word.push_str("= ~");
+                            return CString::new(word).unwrap(); // don't add ' '
+                        }
+                        _ => {
+                            word.push_str(op.into());
+                            word.push_str(Operator::Assignment.into());
+                        }
+                    },
+                    None => {}
+                }
+            }
+        } else if !param_name.is_empty() {
+            if word_index >= c.input.len() && c.output.len() > 0 {
+                word.push_str(" store_to");
+                if !param_name.eq("handle") {
+                    word.push(' ');
+                    word.push_str(param_name);
+                }
+            } else {
+                word.push(' ');
+                word.push_str(param_name);
+            }
+        }
+        word.push(' ');
+        CString::new(word).unwrap()
+    }
+
+    fn is_ternary_command(&self, command: &Command) -> bool {
+        command.input.len() == 2 && command.output.len() == 1 && command.operator.is_some()
+    }
+
+    pub fn load_from_json(&mut self, commands: &HashMap<OpId, Command>) -> bool {
+        for (_, c) in commands {
+            let mut params: HashMap<usize, Param> = HashMap::new();
+
+            let mut is_variadic = false;
+            let mut words: HashMap<usize, CString> = HashMap::new();
+            let iter = c.input.iter().chain(c.output.iter());
+            for (index, param) in iter.enumerate() {
+                if param.r#type == CommandParamType::Arguments {
+                    is_variadic = true;
+                }
+
+                // when an operator is used, put output params (if any) before input params
+                // in decompiled code they would look like: [out] = [arg1] [op] [arg2]
+                let real_index = if c.operator.is_some() {
+                    if index < c.output.len() {
+                        c.input.len() + index
+                    } else {
+                        index - c.output.len()
+                    }
+                } else {
+                    index
+                };
+                params.insert(
+                    index,
+                    Param {
+                        real_index: real_index as u8,
+                        param_type: match param.r#type {
+                            CommandParamType::Gxt => ParamType::Gxt,
+                            CommandParamType::Pointer => ParamType::Pointer,
+                            CommandParamType::AnyModel => ParamType::AnyModel,
+                            CommandParamType::ScriptId => ParamType::ScriptId,
+                            CommandParamType::String8 if self.game == Game::LCS => {
+                                ParamType::String8
+                            }
+                            CommandParamType::IdeModel => ParamType::IdeModel,
+                            CommandParamType::Byte128 => ParamType::Byte128,
+                            _ => ParamType::Any,
+                        },
+                    },
+                );
+                words.insert(index, self.get_word_for_param(index, param.name.trim(), c));
+            }
+
+            if words.is_empty() {
+                words.insert(0, self.get_word_for_param(0, "", c));
+            }
+
+            let opcode = Opcode {
+                num_params: if is_variadic { -1 } else { c.num_params as i8 },
+                params,
+                words,
+            };
+            self.add_opcode(c.id, opcode);
+        }
+
         return true;
     }
 
@@ -354,7 +504,7 @@ impl OpcodeTable {
     }
 }
 
-fn get_game_limit(game: Game) -> u8 {
+fn get_game_limit(game: &Game) -> u8 {
     match game {
         Game::GTA3 => 16 + 2,
         Game::VC => 16 + 2,
