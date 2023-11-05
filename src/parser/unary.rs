@@ -141,5 +141,29 @@ mod tests {
                 })]
             }
         );
+
+        let (_, ast) = parse("-0x100").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Unary(UnaryPrefixExpr {
+                    operator: Token {
+                        syntax_kind: SyntaxKind::OperatorMinus,
+                        start: 1,
+                        len: 1
+                    },
+                    operand: Box::new(Node::Literal(Token {
+                        syntax_kind: SyntaxKind::IntegerLiteral,
+                        start: 2,
+                        len: 5
+                    })),
+                    token: Token {
+                        syntax_kind: SyntaxKind::UnaryPrefixExpr,
+                        start: 1,
+                        len: 6
+                    }
+                })]
+            }
+        );
     }
 }

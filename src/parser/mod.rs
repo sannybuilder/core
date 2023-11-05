@@ -114,4 +114,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_binary() {
+        let (_, ast) = parse("0b101").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 1,
+                    len: 5,
+                    syntax_kind: SyntaxKind::IntegerLiteral
+                })]
+            }
+        );
+    }
+
 }
