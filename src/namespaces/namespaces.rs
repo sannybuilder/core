@@ -25,6 +25,7 @@ pub struct Namespaces {
     opcodes: Vec<Opcode>,
     short_descriptions: HashMap<OpId, /*short_desc*/ CString>,
     pub commands: HashMap<OpId, Command>,
+    extensions: HashMap<OpId, String>,
     map_op_by_id: HashMap<OpId, /*opcodes index*/ usize>,
     map_op_by_name: HashMap<
         /*class_name*/ String,
@@ -127,6 +128,7 @@ impl Namespaces {
             enums: vec![],
             short_descriptions: HashMap::new(),
             commands: HashMap::new(),
+            extensions: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_op_by_command_name: HashMap::new(),
@@ -685,7 +687,7 @@ impl Namespaces {
             Some((CString::new(member.clone()).ok()?, &*op as *const _ as i32))
         }).collect::<Vec<_>>())
     }
-    
+
     fn supports_alternate_method_syntax(&self, op: &Opcode) -> bool {
         op.op_type == OpcodeType::Property //&& self.is_constructor(op.id).unwrap_or(false)
     }
@@ -702,18 +704,17 @@ impl Namespaces {
 
         self.library_version = CString::new(lib.meta.version).ok()?;
 
-        for command in lib
-            .extensions
-            .into_iter()
-            .flat_map(|ext| ext.commands.into_iter())
-            .filter(|c| !c.attrs.is_unsupported)
-        {
-            self.short_descriptions
-                .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
-            self.map_op_by_command_name
-                .insert(command.name.to_ascii_lowercase(), command.id);
-            self.commands.insert(command.id, command);
+        for ext in lib.extensions.into_iter() {
+            for command in ext.commands.into_iter().filter(|c| !c.attrs.is_unsupported) {
+                self.extensions.insert(command.id, ext.name.clone());
+                self.short_descriptions
+                    .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
+                self.map_op_by_command_name
+                    .insert(command.name.to_ascii_lowercase(), command.id);
+                self.commands.insert(command.id, command);
+            }
         }
+
         Some(())
     }
 
@@ -765,6 +766,13 @@ impl Namespaces {
         for (name, op) in self.map_op_by_command_name.iter() {
             let key = apply_format(name, &dict.config.case_format)?;
             dict.add(key, *op as _);
+        }
+        Some(())
+    }
+
+    pub fn populate_extension_list<'a>(&mut self, dict: &mut DictStrByNum) -> Option<()> {
+        for (op, name) in self.extensions.iter() {
+            dict.add(*op as _, CString::new(name.clone()).unwrap());
         }
         Some(())
     }

@@ -142,6 +142,18 @@ pub unsafe extern "C" fn classes_populate_keywords_dict3(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn classes_populate_extension_list(
+    ns: *mut Namespaces,
+    dict: *mut crate::dictionary::dictionary_str_by_num::DictStrByNum,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        ns.populate_extension_list(dict.as_mut()?);
+        Some(())
+    }}
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn classes_find_by_prop(
     ns: *mut Namespaces,
     class_name: PChar,
@@ -421,7 +433,7 @@ mod tests {
         let content = f.load_classes("src/namespaces/test/classes_many.db");
         assert!(content.is_some());
         assert_eq!(f.classes_count(), 11);
-        assert_eq!(f.op_count(), 162);
+        assert_eq!(f.op_count(), 189);
     }
 
     #[test]

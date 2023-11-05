@@ -288,6 +288,7 @@ impl OpcodeTable {
                 }
                 _ => {
                     word.push_str(c.name.to_lowercase().as_str());
+                    word.push(' ');
                 }
             };
             return CString::new(word).unwrap();
