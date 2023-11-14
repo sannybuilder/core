@@ -147,8 +147,8 @@ pub fn try_tranform(
                         return None;
                     }
                     let (var, var_name) = resolve!(left);
-                    let (operand, operand_name) = resolve!(&unary.operand);
-                    if !is_variable(&var) || !is_variable(&operand) {
+                    let (_, operand_name) = resolve!(&unary.operand);
+                    if !is_variable(&var) {
                         return None;
                     }
                     // var = ~var
