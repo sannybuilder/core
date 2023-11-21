@@ -19,7 +19,7 @@ fn document_tree_walk<'a>(
             let first = words.next()?.to_ascii_lowercase();
 
             if let Some(token) = reserved_words.map.get(&first) {
-                if token == &TOKEN_INCLUDE {
+                if token == &TOKEN_INCLUDE || token == &TOKEN_INCLUDE_ONCE {
                     let mut include_path = words.collect::<String>();
 
                     if include_path.ends_with('}') {

@@ -1,5 +1,6 @@
 // from compiler.ini
 pub const TOKEN_INCLUDE: i32 = 103;
+pub const TOKEN_INCLUDE_ONCE: i32 = 109;
 pub const TOKEN_CONST: i32 = 65;
 pub const TOKEN_END: i32 = 255;
 pub const TOKEN_INT: i32 = 1;
