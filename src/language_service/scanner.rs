@@ -82,6 +82,12 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
         return Some(p);
     }
 
+    // todo: 
+    // If the file path is relative, the compiler scans directories in the following order to find the file:
+    // 1. directory of the file with the directive
+    // 2. data folder for the current edit mode
+    // 3. Sanny Builder root directory
+    // 4. the game directory
     let dir_name = Path::new(&parent_file).parent()?;
     let abs_name = dir_name.join(path);
 
@@ -365,7 +371,7 @@ pub fn process_var_declaration(
         return;
     }
     found_constants.push((
-        name.to_ascii_lowercase(),
+        name_lower,
         SymbolInfoMap {
             line_number: line_number as u32,
             _type: SymbolType::Var,
@@ -415,7 +421,8 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
             || value.ends_with('@')
             || value.ends_with("@s")
             || value.ends_with("@v")
-            || (value.ends_with(")") && value.contains("@(")) // arrays 0@(1@,2i)
+            || (value.ends_with(")") && value.contains("@("))
+        // arrays 0@(1@,2i)
         {
             return Some(SymbolType::Var);
         }
@@ -428,11 +435,17 @@ pub fn get_type(value: &str) -> Option<SymbolType> {
         if value.starts_with('@') {
             return Some(SymbolType::Label);
         }
+        if value.starts_with("0x")
+            || value.starts_with("-0x")
+            || value.starts_with("+0x")
+            || value.starts_with("0b")
+            || value.starts_with("-0b")
+            || value.starts_with("+0b")
+        {
+            return Some(SymbolType::Number);
+        }
     }
     if let Some(_) = value.parse::<f32>().ok() {
-        return Some(SymbolType::Number);
-    }
-    if value.starts_with("0x") || value.starts_with("-0x") || value.starts_with("+0x") {
         return Some(SymbolType::Number);
     }
     return None;
