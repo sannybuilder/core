@@ -14,11 +14,17 @@ pub enum SymbolType {
     Label = 3,
     ModelName = 4,
 }
-#[repr(C)]
-#[derive(Debug, Clone)]
 pub struct SymbolInfo {
     pub line_number: u32,
     pub _type: SymbolType,
+    pub value: Option<String>,
+}
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct SymbolInfoRaw {
+    pub line_number: u32,
+    pub _type: SymbolType,
+    pub value: PChar,
 }
 
 pub struct DocumentInfo {
@@ -116,13 +122,15 @@ pub unsafe extern "C" fn language_service_find(
     server: *mut LanguageServer,
     symbol: PChar,
     handle: EditorHandle,
-    out_value: *mut SymbolInfo,
+    out_value: *mut SymbolInfoRaw,
 ) -> bool {
     boolclosure! {{
         let server = server.as_mut()?;
         let s = server.find(pchar_to_str(symbol)?, handle)?;
-        out_value.as_mut()?._type = s._type;
-        out_value.as_mut()?.line_number = s.line_number;
+        let out_value = out_value.as_mut()?;
+        out_value._type = s._type;
+        out_value.line_number = s.line_number;
+        out_value.value = CString::new(s.value.unwrap_or_default()).unwrap().into_raw();
         Some(())
     }}
 }

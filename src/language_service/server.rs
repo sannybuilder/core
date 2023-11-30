@@ -99,12 +99,15 @@ impl LanguageServer {
         let table = st.get(&handle)?;
         let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
         Some(SymbolInfo {
+            // if file_name is None, then it's a symbol from the opened document, use actual line number
+            // otherwise it's a symbol from $include, use 0 as line number
             line_number: if map.file_name.is_some() {
                 0
             } else {
                 map.line_number
             },
             _type: map._type,
+            value: map.value.clone(),
         })
     }
 
