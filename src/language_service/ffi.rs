@@ -76,9 +76,15 @@ pub unsafe extern "C" fn language_service_client_connect_with_file(
     file_name: PChar,
     handle: EditorHandle,
     static_constants_file: PChar,
+    classes_file: PChar,
 ) -> bool {
     boolclosure! {{
-        server.as_mut()?.connect(Source::File(pchar_to_string(file_name)?), handle, pchar_to_str(static_constants_file)?);
+        server.as_mut()?.connect(
+            Source::File(pchar_to_string(file_name)?), 
+            handle, 
+            pchar_to_str(static_constants_file)?, 
+            pchar_to_str(classes_file)?
+        );
         Some(())
     }}
 }
@@ -88,9 +94,15 @@ pub unsafe extern "C" fn language_service_client_connect_in_memory(
     server: *mut LanguageServer,
     handle: EditorHandle,
     static_constants_file: PChar,
+    classes_file: PChar,
 ) -> bool {
     boolclosure! {{
-        server.as_mut()?.connect(Source::Memory, handle, pchar_to_str(static_constants_file)?);
+        server.as_mut()?.connect(
+            Source::Memory, 
+            handle, 
+            pchar_to_str(static_constants_file)?,
+            pchar_to_str(classes_file)?
+        );
         Some(())
     }}
 }

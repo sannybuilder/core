@@ -27,7 +27,7 @@ pub struct Namespaces {
     pub commands: HashMap<OpId, Command>,
     extensions: HashMap<OpId, String>,
     map_op_by_id: HashMap<OpId, /*opcodes index*/ usize>,
-    map_op_by_name: HashMap<
+    pub map_op_by_name: HashMap<
         /*class_name*/ String,
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
@@ -200,11 +200,11 @@ impl Namespaces {
             return None;
         };
 
-        let mut names_str: Vec<String> = vec![];
+        let mut class_names: Vec<String> = vec![];
         while let Some(line) = line_iter.next() {
             if !line.starts_with(|c| c == '#' || c == '$') {
                 self.names.push(CString::new(line).ok()?);
-                names_str.push(String::from(line));
+                class_names.push(String::from(line));
                 continue;
             }
 
@@ -242,26 +242,27 @@ impl Namespaces {
             }
             let name = &line[1..];
 
-            let find_name = match names_str.iter().find(|n| n.eq_ignore_ascii_case(name)) {
+            let find_class_name = match class_names.iter().find(|n| n.eq_ignore_ascii_case(name)) {
                 Some(x) => x,
                 None => continue, // undeclared class -> skip
             };
 
             if line_iter.next()?.eq_ignore_ascii_case("$begin") {
-                let name = &find_name.clone();
+                let class_name = &find_class_name.clone();
                 let mut map: HashMap<String, usize> = HashMap::new();
                 for line in line_iter
                     .by_ref()
                     .take_while(|line| !line.starts_with(|c| c == '#' || c == '$'))
                 {
-                    match self.parse_method(line, name, &mut map) {
+                    match self.parse_method(line, class_name, &mut map) {
                         Some(_) => {}
                         None => {
                             log::debug!("Can't parse the line {}", line);
                         }
                     }
                 }
-                self.map_op_by_name.insert(name.to_ascii_lowercase(), map);
+                self.map_op_by_name
+                    .insert(class_name.to_ascii_lowercase(), map);
             }
         }
         Some(())

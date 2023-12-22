@@ -3,7 +3,10 @@ use super::{
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
-use crate::dictionary::{config, dictionary_num_by_str::DictNumByStr, ffi::CaseFormat};
+use crate::{
+    dictionary::{config, dictionary_num_by_str::DictNumByStr, ffi::CaseFormat},
+    namespaces::namespaces::Namespaces,
+};
 use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
@@ -31,6 +34,7 @@ lazy_static! {
     static ref FILE_WATCHER: Mutex<FileWatcher> = Mutex::new(FileWatcher::new());
     static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
         Mutex::new(HashMap::new());
+    static ref CLASS_NAMES: Mutex<HashMap<EditorHandle, Vec<String>>> = Mutex::new(HashMap::new());
     pub static ref CACHE_FILE_TREE: Mutex<HashMap<String, Vec<String>>> =
         Mutex::new(HashMap::new());
     pub static ref CACHE_FILE_SYMBOLS: Mutex<HashMap<String, Vec<(String, SymbolInfoMap)>>> =
@@ -57,16 +61,29 @@ impl LanguageServer {
         Self { message_queue }
     }
 
-    pub fn connect(&mut self, source: Source, handle: EditorHandle, static_constants_file: &str) {
+    pub fn connect(
+        &mut self,
+        source: Source,
+        handle: EditorHandle,
+        static_constants_file: &str,
+        classes_file: &str,
+    ) {
         log::debug!("New client {} connected with source {:?}", handle, source);
 
         SOURCE_MAP.lock().unwrap().insert(handle, source.clone());
 
-        let static_constants_file = String::from(static_constants_file);
         IMPLICIT_INCLUDES
             .lock()
             .unwrap()
-            .insert(handle, vec![static_constants_file.clone()]);
+            .insert(handle, vec![String::from(static_constants_file)]);
+
+        let mut ns = Namespaces::new();
+        ns.load_classes(classes_file);
+
+        CLASS_NAMES.lock().unwrap().insert(
+            handle,
+            ns.map_op_by_name.keys().cloned().collect::<Vec<_>>(),
+        );
 
         status_change(handle, Status::PendingScan);
     }
@@ -76,6 +93,7 @@ impl LanguageServer {
         SYMBOL_TABLES.lock().unwrap().remove(&handle);
         SOURCE_MAP.lock().unwrap().remove(&handle);
         IMPLICIT_INCLUDES.lock().unwrap().remove(&handle);
+        CLASS_NAMES.lock().unwrap().remove(&handle);
         let mut watcher = FILE_WATCHER.lock().unwrap();
 
         // disconnect editor from all files and stop watching orphan references
@@ -250,6 +268,7 @@ impl LanguageServer {
         log::debug!("Spawn scan for client {}", handle);
         let sources = SOURCE_MAP.lock().unwrap();
         let dict = RESERVED_WORDS.lock().unwrap();
+        let classes = CLASS_NAMES.lock().unwrap();
         let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
         let implicit_includes = IMPLICIT_INCLUDES.lock().unwrap();
 
@@ -259,6 +278,7 @@ impl LanguageServer {
 
             let v = vec![];
             let includes = implicit_includes.get(&handle).unwrap_or(&v);
+            let classes = classes.get(&handle).unwrap_or(&v);
 
             if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
                 log::debug!("Document tree is ready: {} child entries", tree.len());
@@ -266,7 +286,9 @@ impl LanguageServer {
                 LanguageServer::update_watchers(&tree, handle);
                 for file in tree {
                     log::debug!("Fetch symbols from file {}", file);
-                    if let Some(constants) = scanner::find_constants_from_file(&file, &dict) {
+                    if let Some(constants) =
+                        scanner::find_constants_from_file(&file, &dict, &classes)
+                    {
                         log::debug!("Found {} symbols", constants.len());
                         table.add(constants);
                     }
@@ -274,7 +296,7 @@ impl LanguageServer {
             }
 
             log::debug!("Fetch symbols from opened document");
-            if let Some(constants) = scanner::find_constants_from_memory(&text, &dict) {
+            if let Some(constants) = scanner::find_constants_from_memory(&text, &dict, &classes) {
                 log::debug!("Found {} symbols", constants.len());
                 table.add(constants);
             }

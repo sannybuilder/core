@@ -82,7 +82,7 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
         return Some(p);
     }
 
-    // todo: 
+    // todo:
     // If the file path is relative, the compiler scans directories in the following order to find the file:
     // 1. directory of the file with the directive
     // 2. data folder for the current edit mode
@@ -121,6 +121,7 @@ pub fn document_tree<'a>(
 pub fn find_constants_from_file(
     file_name: &String,
     reserved_words: &DictNumByStr,
+    class_names: &Vec<String>,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let mut cache = CACHE_FILE_SYMBOLS.lock().unwrap();
     match cache.get(file_name) {
@@ -131,8 +132,12 @@ pub fn find_constants_from_file(
         None => {
             log::debug!("Symbol cache not found. Reading file {}", file_name);
             let content = fs::read_to_string(file_name).ok()?;
-            let symbols =
-                find_constants(&content, reserved_words, &Source::File(file_name.clone()))?;
+            let symbols = find_constants(
+                &content,
+                reserved_words,
+                class_names,
+                &Source::File(file_name.clone()),
+            )?;
             cache.insert(file_name.clone(), symbols.clone());
             Some(symbols)
         }
@@ -142,13 +147,15 @@ pub fn find_constants_from_file(
 pub fn find_constants_from_memory(
     content: &String,
     reserved_words: &DictNumByStr,
+    class_names: &Vec<String>,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
-    find_constants(&content, reserved_words, &Source::Memory)
+    find_constants(&content, reserved_words, class_names, &Source::Memory)
 }
 
 pub fn find_constants<'a>(
     content: &String,
     reserved_words: &DictNumByStr,
+    class_names: &Vec<String>,
     source: &Source,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let mut lines: Vec<String> = vec![];
@@ -282,6 +289,15 @@ pub fn find_constants<'a>(
                         line_number,
                         &file_name,
                     );
+                }
+            }
+            _ if class_names.contains(&first) => {
+                // class declaration
+                let rest = words.collect::<String>();
+                let names = split_const_line(&rest);
+
+                for name in names {
+                    process_var_declaration(&name, &mut found_constants, line_number, &file_name)
                 }
             }
             _ => {
