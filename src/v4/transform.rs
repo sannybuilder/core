@@ -313,84 +313,74 @@ pub fn try_tranform(
                             if !is_variable(&right_operand) {
                                 return None;
                             }
-                            let t1 = *var_types.map.get(&var_name)?;
-                            let t2 = *var_types.map.get(&right_operand_name)?;
+                            let left_var = as_variable(&var)?;
+                            let right_var = as_variable(&right_operand)?;
+
+                            let t1 = *var_types
+                                .map
+                                .get(token_str(expr, left_var.get_var_name()))?;
+                            let t2 = *var_types
+                                .map
+                                .get(token_str(expr, right_var.get_var_name()))?;
 
                             use crate::utils::compiler_const::*;
-                            let left_var = as_variable(&var)?;
-                            match right_token.syntax_kind {
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // var =# var // int = float
-                                    return op(OP_CSET_VAR_INT_TO_VAR_FLOAT);
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    op(OP_CSET_VAR_FLOAT_TO_VAR_INT)
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // lvar =# lvar // int = float
-                                    return op(OP_CSET_LVAR_INT_TO_LVAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // lvar =# lvar // float = int
-                                    return op(OP_CSET_LVAR_FLOAT_TO_LVAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // lvar =# var // int = float
-                                    return op(OP_CSET_LVAR_INT_TO_VAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // lvar =# var // float = int
-                                    return op(OP_CSET_LVAR_FLOAT_TO_VAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // var =# lvar // int = float
-                                    return op(OP_CSET_VAR_INT_TO_LVAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // var =# lvar // float = int
-                                    return op(OP_CSET_VAR_FLOAT_TO_LVAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
+                            if right_var.is_global() {
+                                if left_var.is_global() {
+                                    if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                                        // var =# var // int = float
+                                        return op(OP_CSET_VAR_INT_TO_VAR_FLOAT);
+                                    };
+                                    if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                                        // var =# var // float = int
+                                        return op(OP_CSET_VAR_FLOAT_TO_VAR_INT);
+                                    };
                                 }
 
-                                _ => None,
+                                if left_var.is_local() {
+                                    if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                                        // lvar =# var // int = float
+                                        return op(OP_CSET_LVAR_INT_TO_VAR_FLOAT)
+                                            .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                                    }
+                                    if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                                        // lvar =# var // float = int
+                                        return op(OP_CSET_LVAR_FLOAT_TO_VAR_INT)
+                                            .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                                    }
+                                }
                             }
+
+                            if right_var.is_local() {
+                                if left_var.is_local() {
+                                    if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                                        // lvar =# lvar // int = float
+                                        return op(OP_CSET_LVAR_INT_TO_LVAR_FLOAT)
+                                            .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                                    }
+
+                                    if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                                        // lvar =# lvar // float = int
+                                        return op(OP_CSET_LVAR_FLOAT_TO_LVAR_INT)
+                                            .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                                    }
+                                }
+
+                                if left_var.is_global() {
+                                    if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                                        // var =# lvar // int = float
+                                        return op(OP_CSET_VAR_INT_TO_LVAR_FLOAT)
+                                            .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                                    }
+
+                                    if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                                        // var =# lvar // float = int
+                                        return op(OP_CSET_VAR_FLOAT_TO_LVAR_INT)
+                                            .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                                    }
+                                }
+                            }
+
+                            return None;
                         }
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(&var)?;

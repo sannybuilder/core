@@ -90,6 +90,14 @@ pub enum Variable {
 }
 
 impl Variable {
+    pub fn get_var_name(&self) -> &Token {
+        match self {
+            Variable::Indexed(v) => &v.var.get_var_name(),
+            Variable::ArrayElement(v) => &v.array_var.get_var_name(),
+            Variable::Local(v) | Variable::Global(v) | Variable::Adma(v) => &v.token,
+        }
+    }
+
     pub fn is_global(&self) -> bool {
         match self {
             Variable::Global(_) | Variable::Adma(_) => true,
