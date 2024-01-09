@@ -1,9 +1,10 @@
 use crate::common_ffi::*;
 use crate::dictionary::ffi::*;
+use std::ffi::CString;
 
 use super::config::ConfigBuilder;
 
-pub type DictNumByStr = Dict<String, i32>;
+pub type DictNumByStr = Dict<CString, i32>;
 
 #[no_mangle]
 pub extern "C" fn dictionary_num_by_str_new(
@@ -55,7 +56,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_add(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format_s(pchar_to_str(key)?, &d.config.case_format);
+        let key = apply_format(pchar_to_str(key)?, &d.config.case_format)?;
         d.add(key, value);
         Some(())
     }}
@@ -69,7 +70,7 @@ pub unsafe extern "C" fn dictionary_num_by_str_find(
 ) -> bool {
     boolclosure! {{
         let d = dict.as_mut()?;
-        let key = apply_format_s(pchar_to_str(key)?, &d.config.case_format);
+        let key = apply_format(pchar_to_str(key)?, &d.config.case_format)?;
         *out = *d.map.get(&key)?;
         Some(())
     }}
@@ -78,6 +79,29 @@ pub unsafe extern "C" fn dictionary_num_by_str_find(
 #[no_mangle]
 pub unsafe extern "C" fn dictionary_num_by_str_free(ptr: *mut DictNumByStr) {
     ptr_free(ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dictionary_num_by_str_get_count(dict: *mut DictNumByStr) -> usize {
+    if let Some(ptr) = dict.as_mut() {
+        return ptr.map.len();
+    }
+    return 0;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dictionary_num_by_str_get_entry(
+    dict: *mut DictNumByStr,
+    index: usize,
+    out_key: *mut PChar,
+    out_value: *mut i32,
+) -> bool {
+    boolclosure! {{
+      let (key, value) = dict.as_mut()?.map.iter().nth(index)?;
+      *out_key = key.as_ptr();
+      *out_value = *value;
+      Some(())
+    }}
 }
 
 #[cfg(test)]

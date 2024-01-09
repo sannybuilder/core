@@ -1,5 +1,5 @@
 use super::ffi::{Source, SymbolInfoMap, SymbolType};
-use crate::dictionary::dictionary_num_by_str::DictNumByStr;
+use crate::dictionary::DictNumByString;
 use crate::language_service::server::{CACHE_FILE_SYMBOLS, CACHE_FILE_TREE};
 use crate::utils::compiler_const::*;
 use std::fs;
@@ -8,7 +8,7 @@ use std::path::Path;
 fn document_tree_walk<'a>(
     content: &String,
     file_name: &String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     mut refs: &mut Vec<String>,
 ) -> Vec<String> {
     content
@@ -57,7 +57,7 @@ fn document_tree_walk<'a>(
 
 fn file_walk(
     file_name: String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     mut refs: &mut Vec<String>,
 ) -> Option<Vec<String>> {
     let content = fs::read_to_string(&file_name).ok()?;
@@ -96,7 +96,7 @@ fn resolve_path(p: String, parent_file: &String) -> Option<String> {
 
 pub fn document_tree<'a>(
     text: &String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     implicit_includes: &Vec<String>,
     source: &Source,
 ) -> Option<Vec<String>> {
@@ -120,7 +120,7 @@ pub fn document_tree<'a>(
 
 pub fn find_constants_from_file(
     file_name: &String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     class_names: &Vec<String>,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     let mut cache = CACHE_FILE_SYMBOLS.lock().unwrap();
@@ -146,7 +146,7 @@ pub fn find_constants_from_file(
 
 pub fn find_constants_from_memory(
     content: &String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     class_names: &Vec<String>,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {
     find_constants(&content, reserved_words, class_names, &Source::Memory)
@@ -154,7 +154,7 @@ pub fn find_constants_from_memory(
 
 pub fn find_constants<'a>(
     content: &String,
-    reserved_words: &DictNumByStr,
+    reserved_words: &DictNumByString,
     class_names: &Vec<String>,
     source: &Source,
 ) -> Option<Vec<(String, SymbolInfoMap)>> {

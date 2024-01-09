@@ -745,9 +745,9 @@ impl Namespaces {
     }
 
     pub fn populate_keywords<'a>(&mut self, dict: &mut DictNumByStr) -> Option<()> {
-        use crate::dictionary::ffi::apply_format_s;
+        use crate::dictionary::ffi::apply_format;
         for (name, op) in self.map_op_by_command_name.iter() {
-            let key = apply_format_s(name, &dict.config.case_format);
+            let key = apply_format(name, &dict.config.case_format)?;
             dict.add(key, *op as _);
         }
         Some(())

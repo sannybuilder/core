@@ -4,7 +4,7 @@ use super::{
     {scanner, symbol_table::SymbolTable},
 };
 use crate::{
-    dictionary::{config, dictionary_num_by_str::DictNumByStr, ffi::CaseFormat},
+    dictionary::{config, ffi::CaseFormat, DictNumByString},
     namespaces::namespaces::Namespaces,
 };
 use lazy_static::lazy_static;
@@ -26,7 +26,7 @@ lazy_static! {
     static ref WATCHED_FILES: Mutex<HashMap<String, HashSet<EditorHandle>>> =
         Mutex::new(HashMap::new());
     static ref SOURCE_MAP: Mutex<HashMap<EditorHandle, Source>> = Mutex::new(HashMap::new());
-    static ref RESERVED_WORDS: Mutex<DictNumByStr> = Mutex::new(DictNumByStr::new(
+    static ref RESERVED_WORDS: Mutex<DictNumByString> = Mutex::new(DictNumByString::new(
         config::ConfigBuilder::new()
             .set_case_format(CaseFormat::LowerCase)
             .build()
