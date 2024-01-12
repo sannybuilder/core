@@ -1,5 +1,5 @@
 use super::{
-    ffi::{DocumentInfo, EditorHandle, Source, Status, SymbolInfo, SymbolInfoMap},
+    ffi::{DocumentInfo, EditorHandle, Source, Status, SymbolInfo},
     watcher::FileWatcher,
     {scanner, symbol_table::SymbolTable},
 };
@@ -35,9 +35,7 @@ lazy_static! {
     static ref IMPLICIT_INCLUDES: Mutex<HashMap<EditorHandle, Vec<String>>> =
         Mutex::new(HashMap::new());
     static ref CLASS_NAMES: Mutex<HashMap<EditorHandle, Vec<String>>> = Mutex::new(HashMap::new());
-    pub static ref CACHE_FILE_TREE: Mutex<HashMap<String, Vec<String>>> =
-        Mutex::new(HashMap::new());
-    pub static ref CACHE_FILE_SYMBOLS: Mutex<HashMap<String, Vec<(String, SymbolInfoMap)>>> =
+    pub static ref CACHE_FILE_SYMBOLS: Mutex<HashMap</*file name*/String, SymbolTable>> =
         Mutex::new(HashMap::new());
 }
 
@@ -117,13 +115,7 @@ impl LanguageServer {
         let table = st.get(&handle)?;
         let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
         Some(SymbolInfo {
-            // if file_name is None, then it's a symbol from the opened document, use actual line number
-            // otherwise it's a symbol from $include, use 0 as line number
-            line_number: if map.file_name.is_some() {
-                0
-            } else {
-                map.line_number
-            },
+            line_number: map.line_number,
             _type: map._type,
             value: map.value.clone(),
         })
@@ -178,8 +170,8 @@ impl LanguageServer {
         message_queue
     }
 
-    fn update_watchers(tree: &Vec<String>, handle: EditorHandle) {
-        log::debug!("Updating file watchers");
+    fn update_watchers(tree: &HashSet<String>, handle: EditorHandle) {
+        log::debug!("Updating {} file watchers for handle {handle}", tree.len());
 
         let mut watched_files = WATCHED_FILES.lock().unwrap();
         let mut watcher = FILE_WATCHER.lock().unwrap();
@@ -213,7 +205,6 @@ impl LanguageServer {
                     let file_name1 = file_name.clone();
                     watcher.watch(file_name.as_str(), move |event| match event {
                         hotwatch::Event::Write(_) => {
-                            // todo: check if possible to use file name from event payload
                             LanguageServer::invalidate_file_cache(&file_name1);
                             LanguageServer::rescan(&file_name1)
                         }
@@ -227,21 +218,6 @@ impl LanguageServer {
     }
 
     fn invalidate_file_cache(file_name: &String) {
-        let mut cache = CACHE_FILE_TREE.lock().unwrap();
-
-        // invalidate cache for all files referencing this file
-        // todo: change file cache to only store its own references and not children
-        // then use cache.remove(file_name)
-        let _drained = cache
-            .drain_filter(|k, v| {
-                if k == file_name || v.contains(file_name) {
-                    log::debug!("Invalidating tree cache for file {}", k);
-                    return true;
-                }
-                return false;
-            })
-            .collect::<Vec<_>>();
-
         CACHE_FILE_SYMBOLS
             .lock()
             .unwrap()
@@ -252,6 +228,7 @@ impl LanguageServer {
             });
     }
 
+    /// Schedule scan for all clients referencing this file
     fn rescan(file_name: &String) {
         log::debug!("File {} has changed", file_name);
         let files = WATCHED_FILES.lock().unwrap();
@@ -272,34 +249,28 @@ impl LanguageServer {
         let mut symbol_table = SYMBOL_TABLES.lock().unwrap();
         let implicit_includes = IMPLICIT_INCLUDES.lock().unwrap();
 
-        log::debug!("Reading source to build document tree");
         if let Some(source) = sources.get(&handle) {
+            log::debug!("Reading source {:?} to build document tree", source);
             let mut table = SymbolTable::new();
 
             let v = vec![];
             let includes = implicit_includes.get(&handle).unwrap_or(&v);
+            let v = vec![];
             let classes = classes.get(&handle).unwrap_or(&v);
 
-            if let Some(tree) = scanner::document_tree(&text, &dict, includes, source) {
-                log::debug!("Document tree is ready: {} child entries", tree.len());
+            let mut visited = HashSet::new();
+            scanner::scan_document(
+                &text,
+                &dict,
+                includes,
+                source,
+                &classes,
+                &mut table,
+                &mut visited,
+            );
+            LanguageServer::update_watchers(&visited, handle);
 
-                LanguageServer::update_watchers(&tree, handle);
-                for file in tree {
-                    log::debug!("Fetch symbols from file {}", file);
-                    if let Some(constants) =
-                        scanner::find_constants_from_file(&file, &dict, &classes)
-                    {
-                        log::debug!("Found {} symbols", constants.len());
-                        table.add(constants);
-                    }
-                }
-            }
-
-            log::debug!("Fetch symbols from opened document");
-            if let Some(constants) = scanner::find_constants_from_memory(&text, &dict, &classes) {
-                log::debug!("Found {} symbols", constants.len());
-                table.add(constants);
-            }
+            log::debug!("Symbol table is ready: {} symbols", table.symbols.len());
 
             symbol_table.insert(handle, table);
             status_change(handle, Status::Idle);
@@ -313,6 +284,7 @@ impl LanguageServer {
     }
 }
 
+/// Send status change message to Sanny Builder
 fn status_change(handle: u32, status: Status) {
     use crate::sdk::messages::{send_message, WM_ONSTATUSCHANGE};
     send_message(WM_ONSTATUSCHANGE, handle as _, status as _)

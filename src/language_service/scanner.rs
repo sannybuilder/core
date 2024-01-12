@@ -1,155 +1,111 @@
 use super::ffi::{Source, SymbolInfoMap, SymbolType};
+use super::symbol_table::SymbolTable;
 use crate::dictionary::DictNumByString;
-use crate::language_service::server::{CACHE_FILE_SYMBOLS, CACHE_FILE_TREE};
+use crate::language_service::server::CACHE_FILE_SYMBOLS;
 use crate::utils::compiler_const::*;
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-fn document_tree_walk<'a>(
-    content: &String,
+fn file_walk(
     file_name: &String,
     reserved_words: &DictNumByString,
-    mut refs: &mut Vec<String>,
-) -> Vec<String> {
-    content
-        .lines()
-        .filter_map(|x| {
-            // todo: use nom parser
-            let mut words = x.split_ascii_whitespace();
-            let first = words.next()?.to_ascii_lowercase();
+    visited: &mut HashSet<String>,
+    class_names: &Vec<String>,
+    table: &mut SymbolTable,
+    line_number: Option<usize>,
+) {
+    // ignore cyclic paths
+    if !visited.insert(file_name.clone()) {
+        return;
+    }
 
-            if let Some(token) = reserved_words.map.get(&first) {
-                if token == &TOKEN_INCLUDE || token == &TOKEN_INCLUDE_ONCE {
-                    let mut include_path = words.collect::<String>();
+    // if present, use file's cached symbols (all symbols from the file and all included files)
+    if let Some(symbols) = CACHE_FILE_SYMBOLS.lock().unwrap().get(file_name) {
+        log::debug!("Using cached symbols for file {}", file_name);
+        table.extend(symbols);
+        return;
+    }
 
-                    if include_path.ends_with('}') {
-                        include_path.pop();
-                    }
+    log::debug!("Symbol cache not found. Reading file {}", file_name);
+    let Ok(content) = fs::read_to_string(&file_name) else { return };
 
-                    let path = resolve_path(include_path, file_name)?;
+    // create a new table for this file and its descendants
+    let mut local_table = SymbolTable::new();
+    find_constants(
+        &content,
+        reserved_words,
+        class_names,
+        &Source::File(file_name.clone()),
+        visited,
+        &mut local_table,
+        line_number,
+    );
 
-                    // ignore cyclic paths
-                    if refs.contains(&path) {
-                        return None;
-                    } else {
-                        refs.push(path.clone());
-                    }
-
-                    let mut tree = match get_cached_tree(&path) {
-                        Some(tree) => {
-                            log::debug!("Using cached tree for file {}", path);
-                            tree
-                        }
-                        None => {
-                            log::debug!("Tree cache not found. Reading file {}", path);
-                            file_walk(path.clone(), reserved_words, &mut refs)?
-                        }
-                    };
-                    tree.push(path);
-                    return Some(tree);
-                }
-            }
-            None
-        })
-        .flatten()
-        .collect::<Vec<_>>()
+    // use found symbols and cache them
+    table.extend(&local_table);
+    CACHE_FILE_SYMBOLS
+        .lock()
+        .unwrap()
+        .insert(file_name.clone(), local_table);
 }
 
-fn file_walk(
-    file_name: String,
-    reserved_words: &DictNumByString,
-    mut refs: &mut Vec<String>,
-) -> Option<Vec<String>> {
-    let content = fs::read_to_string(&file_name).ok()?;
-    let tree = document_tree_walk(&content, &file_name, reserved_words, &mut refs);
-
-    log::debug!("Caching file tree {}", file_name);
-    let mut cache = CACHE_FILE_TREE.lock().unwrap();
-    cache.insert(file_name.clone(), tree.clone());
-
-    Some(tree)
-}
-
-fn get_cached_tree(file_name: &String) -> Option<Vec<String>> {
-    let cache = CACHE_FILE_TREE.lock().unwrap();
-    cache.get(file_name).cloned()
-}
-
-fn resolve_path(p: String, parent_file: &String) -> Option<String> {
+fn resolve_path(p: String, parent_file: &Option<String>) -> Option<String> {
     let path = Path::new(&p);
 
     if path.is_absolute() {
         return Some(p);
     }
 
-    // todo:
-    // If the file path is relative, the compiler scans directories in the following order to find the file:
-    // 1. directory of the file with the directive
-    // 2. data folder for the current edit mode
-    // 3. Sanny Builder root directory
-    // 4. the game directory
-    let dir_name = Path::new(&parent_file).parent()?;
-    let abs_name = dir_name.join(path);
+    match parent_file {
+        Some(x) => {
+            // todo:
+            // If the file path is relative, the compiler scans directories in the following order to find the file:
+            // 1. directory of the file with the directive
+            // 2. data folder for the current edit mode
+            // 3. Sanny Builder root directory
+            // 4. the game directory
+            let dir_name = Path::new(&x).parent()?;
+            let abs_name = dir_name.join(path);
 
-    Some(String::from(abs_name.to_str()?))
+            Some(String::from(abs_name.to_str()?))
+        }
+        None => None,
+    }
 }
 
-pub fn document_tree<'a>(
+/// read the source code and extract all constants and variables
+/// if the file contains an include directive, recursively scan the included file
+/// also, scan all implicit includes (constants.txt)
+pub fn scan_document<'a>(
     text: &String,
     reserved_words: &DictNumByString,
     implicit_includes: &Vec<String>,
     source: &Source,
-) -> Option<Vec<String>> {
-    match source {
-        Source::File(file_name) => {
-            let mut refs: Vec<String> = vec![];
-            let mut tree = document_tree_walk(text, file_name, reserved_words, &mut refs);
-
-            tree.extend(implicit_includes.iter().filter_map(|include_path| {
-                Some(resolve_path(
-                    include_path.to_owned(),
-                    &file_name.to_string(),
-                )?)
-            }));
-
-            Some(tree)
-        }
-        Source::Memory => Some(implicit_includes.clone()),
-    }
-}
-
-pub fn find_constants_from_file(
-    file_name: &String,
-    reserved_words: &DictNumByString,
     class_names: &Vec<String>,
-) -> Option<Vec<(String, SymbolInfoMap)>> {
-    let mut cache = CACHE_FILE_SYMBOLS.lock().unwrap();
-    match cache.get(file_name) {
-        Some(symbols) => {
-            log::debug!("Using cached symbols for file {}", file_name);
-            Some(symbols.clone())
-        }
-        None => {
-            log::debug!("Symbol cache not found. Reading file {}", file_name);
-            let content = fs::read_to_string(file_name).ok()?;
-            let symbols = find_constants(
-                &content,
-                reserved_words,
-                class_names,
-                &Source::File(file_name.clone()),
-            )?;
-            cache.insert(file_name.clone(), symbols.clone());
-            Some(symbols)
-        }
+    table: &mut SymbolTable,
+    visited: &mut HashSet<String>,
+) {
+    for file_name in implicit_includes {
+        file_walk(
+            file_name,
+            reserved_words,
+            visited,
+            class_names,
+            table,
+            Some(0),
+        );
     }
-}
 
-pub fn find_constants_from_memory(
-    content: &String,
-    reserved_words: &DictNumByString,
-    class_names: &Vec<String>,
-) -> Option<Vec<(String, SymbolInfoMap)>> {
-    find_constants(&content, reserved_words, class_names, &Source::Memory)
+    find_constants(
+        text,
+        reserved_words,
+        class_names,
+        source,
+        visited,
+        table,
+        None, // line number to be determined as we parse the source code
+    );
 }
 
 pub fn find_constants<'a>(
@@ -157,10 +113,13 @@ pub fn find_constants<'a>(
     reserved_words: &DictNumByString,
     class_names: &Vec<String>,
     source: &Source,
-) -> Option<Vec<(String, SymbolInfoMap)>> {
+    visited: &mut HashSet<String>,
+    table: &mut SymbolTable,
+    line_number: Option<usize>,
+) {
     let mut lines: Vec<String> = vec![];
     let mut line = String::new();
-    let mut chars = content.chars();
+    let mut chars = content.chars().peekable();
 
     'outer: while let Some(c) = chars.next() {
         match c {
@@ -168,7 +127,8 @@ pub fn find_constants<'a>(
                 lines.push(line);
                 line = String::new();
             }
-            '{' => {
+            '{' if chars.peek() != Some(&'$') => {
+                // directives {$...}
                 // { } block
                 loop {
                     match chars.next() {
@@ -225,13 +185,12 @@ pub fn find_constants<'a>(
     lines.push(line);
 
     // let mut lines = content.lines().enumerate();
-    let mut found_constants = vec![];
     let mut inside_const = false;
     let file_name = match source {
         Source::File(path) => Some(path.clone()),
         Source::Memory => None,
     };
-    for (line_number, line) in lines.iter().enumerate() {
+    for (_index, line) in lines.iter().enumerate() {
         if line.is_empty() {
             continue;
         }
@@ -240,8 +199,34 @@ pub fn find_constants<'a>(
             Some(word) => word.to_ascii_lowercase(),
             None => continue,
         };
+        /*
+            if the file is a $include in the current document, then we need all its symbols (including deep $include's)
+            to have a line number of the $include statement in the current document
+
+            if the file is an implicit include (constants.txt), then all its symbols have a line number of 0
+        */
+        let line_number = line_number.unwrap_or(_index);
+
         match reserved_words.map.get(&first) {
             Some(token) => match *token {
+                TOKEN_INCLUDE | TOKEN_INCLUDE_ONCE => {
+                    let mut include_path = words.collect::<String>();
+
+                    if include_path.ends_with('}') {
+                        include_path.pop();
+                    }
+
+                    let Some(path) = resolve_path(include_path, &file_name) else { continue };
+
+                    file_walk(
+                        &path,
+                        reserved_words,
+                        visited,
+                        class_names,
+                        table,
+                        Some(line_number),
+                    );
+                }
                 TOKEN_CONST => {
                     let rest = words.collect::<String>();
 
@@ -249,12 +234,7 @@ pub fn find_constants<'a>(
                         let declarations = split_const_line(&rest);
 
                         for declaration in declarations.iter() {
-                            process_const_declaration(
-                                &declaration,
-                                &mut found_constants,
-                                line_number,
-                                &file_name,
-                            );
+                            process_const_declaration(&declaration, table, line_number, &file_name);
                         }
                     } else {
                         inside_const = true;
@@ -269,12 +249,7 @@ pub fn find_constants<'a>(
                     let names = split_const_line(&rest);
 
                     for name in names {
-                        process_var_declaration(
-                            &name,
-                            &mut found_constants,
-                            line_number,
-                            &file_name,
-                        )
+                        process_var_declaration(&name, table, line_number, &file_name)
                     }
                 }
                 _ => {}
@@ -283,12 +258,7 @@ pub fn find_constants<'a>(
                 let declarations = split_const_line(line);
 
                 for declaration in declarations.iter() {
-                    process_const_declaration(
-                        &declaration,
-                        &mut found_constants,
-                        line_number,
-                        &file_name,
-                    );
+                    process_const_declaration(&declaration, table, line_number, &file_name);
                 }
             }
             _ if class_names.contains(&first) => {
@@ -297,7 +267,7 @@ pub fn find_constants<'a>(
                 let names = split_const_line(&rest);
 
                 for name in names {
-                    process_var_declaration(&name, &mut found_constants, line_number, &file_name)
+                    process_var_declaration(&name, table, line_number, &file_name)
                 }
             }
             _ => {
@@ -305,13 +275,11 @@ pub fn find_constants<'a>(
             }
         }
     }
-
-    Some(found_constants)
 }
 
 pub fn process_const_declaration(
     line: &str,
-    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    table: &mut SymbolTable,
     line_number: usize,
     file_name: &Option<String>,
 ) {
@@ -320,7 +288,7 @@ pub fn process_const_declaration(
     let Some(name) = tokens.next() else { return };
     let name = name.trim();
     let name_lower = name.to_ascii_lowercase();
-    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+    if table.symbols.contains_key(&name_lower) {
         log::debug!(
             "Found duplicate const declaration {} in line {}",
             name,
@@ -331,40 +299,28 @@ pub fn process_const_declaration(
 
     let Some(value) = tokens.next() else { return };
     let value = value.trim();
+    let Some(_type) = get_type(value).or_else(|| table.symbols.get(value).map(|x| x._type)) else { return };
 
-    macro_rules! add_to_constants {
-        ($type:expr) => {
-            found_constants.push((
-                name_lower,
-                SymbolInfoMap {
-                    line_number: line_number as u32,
-                    _type: $type,
-                    file_name: file_name.clone(),
-                    value: Some(String::from(value)),
-                    name_no_format: name.to_string(),
-                },
-            ));
-        };
-    }
-
-    match get_type(value) {
-        Some(_type) => {
-            add_to_constants!(_type);
-        }
-        None => {
-            if let Some((_, symbol)) = found_constants
-                .iter()
-                .find(|x| x.0 == value.to_ascii_lowercase())
-            {
-                add_to_constants!(symbol._type);
-            };
-        }
-    }
+    log::debug!(
+        "Found const declaration {} in line {}",
+        name,
+        line_number + 1
+    );
+    table.symbols.insert(
+        name_lower,
+        SymbolInfoMap {
+            line_number: line_number as u32,
+            _type,
+            file_name: file_name.clone(),
+            value: Some(String::from(value)),
+            name_no_format: name.to_string(),
+        },
+    );
 }
 
 pub fn process_var_declaration(
     line: &str,
-    found_constants: &mut Vec<(String, SymbolInfoMap)>,
+    table: &mut SymbolTable,
     line_number: usize,
     file_name: &Option<String>,
 ) {
@@ -378,15 +334,16 @@ pub fn process_var_declaration(
 
     let name = name.trim();
     let name_lower = name.to_ascii_lowercase();
-    if found_constants.iter().any(|(n, _)| n == &name_lower) {
+    if table.symbols.contains_key(&name_lower) {
         log::debug!(
-            "Found duplicate const declaration {} in line {}",
+            "Found duplicate var declaration {} in line {}",
             name,
             line_number + 1
         );
         return;
     }
-    found_constants.push((
+    // todo: try_insert
+    table.symbols.insert(
         name_lower,
         SymbolInfoMap {
             line_number: line_number as u32,
@@ -395,25 +352,25 @@ pub fn process_var_declaration(
             value: None,
             name_no_format: name.to_string(),
         },
-    ))
+    );
 }
 
 pub fn split_const_line(line: &str) -> Vec<String> {
     // iterate over chars, split by , ignore commas inside parentheses
     let mut result = vec![];
     let mut current: usize = 0;
-    let mut inside_parentheses = false;
+    let mut inside_parentheses = 0;
 
     for (i, c) in line.chars().enumerate() {
         match c {
             '(' => {
-                inside_parentheses = true;
+                inside_parentheses += 1;
             }
             ')' => {
-                inside_parentheses = false;
+                inside_parentheses -= 1;
             }
             ',' => {
-                if !inside_parentheses {
+                if inside_parentheses == 0 {
                     result.push(line[current..i].to_string());
                     current = i + 1;
                 }
@@ -473,7 +430,7 @@ mod tests {
 
     #[test]
     fn test1() {
-        let p = resolve_path(String::from("2.txt"), &String::from("C:/dev/1.txt")).unwrap();
+        let p = resolve_path(String::from("2.txt"), &Some(String::from("C:/dev/1.txt"))).unwrap();
         assert_eq!(p, String::from("C:/dev\\2.txt"));
     }
 }

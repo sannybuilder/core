@@ -2,7 +2,7 @@ use super::ffi::SymbolInfoMap;
 use std::collections::HashMap;
 
 pub struct SymbolTable {
-    pub symbols: HashMap<String, SymbolInfoMap>,
+    pub symbols: HashMap</*symbol name (lowercase)*/ String, SymbolInfoMap>,
 }
 
 impl SymbolTable {
@@ -12,7 +12,7 @@ impl SymbolTable {
         }
     }
 
-    pub fn add(&mut self, constants: Vec<(String, SymbolInfoMap)>) {
-        self.symbols.extend(constants);
+    pub fn extend(&mut self, from: &SymbolTable) {
+        self.symbols.extend(from.symbols.clone());
     }
 }
