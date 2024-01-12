@@ -13,6 +13,7 @@ fn file_walk(
     visited: &mut HashSet<String>,
     class_names: &Vec<String>,
     table: &mut SymbolTable,
+    scope_stack: &mut Vec<u32>,
     line_number: Option<usize>,
 ) {
     // ignore cyclic paths
@@ -38,6 +39,7 @@ fn file_walk(
         class_names,
         &Source::File(file_name.clone()),
         visited,
+        scope_stack,
         &mut local_table,
         line_number,
     );
@@ -85,6 +87,7 @@ pub fn scan_document<'a>(
     class_names: &Vec<String>,
     table: &mut SymbolTable,
     visited: &mut HashSet<String>,
+    scope_stack: &mut Vec<u32>,
 ) {
     for file_name in implicit_includes {
         file_walk(
@@ -93,6 +96,7 @@ pub fn scan_document<'a>(
             visited,
             class_names,
             table,
+            scope_stack,
             Some(0),
         );
     }
@@ -103,6 +107,7 @@ pub fn scan_document<'a>(
         class_names,
         source,
         visited,
+        scope_stack,
         table,
         None, // line number to be determined as we parse the source code
     );
@@ -114,6 +119,7 @@ pub fn find_constants<'a>(
     class_names: &Vec<String>,
     source: &Source,
     visited: &mut HashSet<String>,
+    scope_stack: &mut Vec<u32>,
     table: &mut SymbolTable,
     line_number: Option<usize>,
 ) {
@@ -207,6 +213,8 @@ pub fn find_constants<'a>(
         */
         let line_number = line_number.unwrap_or(_index);
 
+        let stack_id = scope_stack.len() as u32;
+
         match reserved_words.map.get(&first) {
             Some(token) => match *token {
                 TOKEN_INCLUDE | TOKEN_INCLUDE_ONCE => {
@@ -224,6 +232,7 @@ pub fn find_constants<'a>(
                         visited,
                         class_names,
                         table,
+                        scope_stack,
                         Some(line_number),
                     );
                 }
@@ -234,13 +243,39 @@ pub fn find_constants<'a>(
                         let declarations = split_const_line(&rest);
 
                         for declaration in declarations.iter() {
-                            process_const_declaration(&declaration, table, line_number, &file_name);
+                            process_const_declaration(&declaration, table, line_number, stack_id);
                         }
                     } else {
                         inside_const = true;
                     }
                 }
                 TOKEN_END if inside_const => inside_const = false,
+                TOKEN_END => {
+                    log::debug!("Found end of block in line {}", line_number + 1);
+                    if stack_id < 2 {
+                        // global scope, only ends when the file ends
+                        continue;
+                    }
+                    // number of nested blocks in the current function
+                    let mut fn_blocks = scope_stack.last_mut().unwrap();
+                    if *fn_blocks == 0 {
+                        // there are no other open blocks in this function, this is the function's end
+
+                        // find all symbols with stack_id
+                        for (_, symbol) in table.symbols.iter_mut() {
+                            if symbol.stack_id == stack_id {
+                                symbol.end_line_number = line_number as u32;
+                                symbol.stack_id = 0; // mark as processed
+                            }
+                        }
+
+                        // delete function scope
+                        scope_stack.pop();
+                    } else {
+                        // exit block
+                        *fn_blocks -= 1;
+                    }
+                }
                 TOKEN_INT | TOKEN_FLOAT | TOKEN_STRING | TOKEN_LONGSTRING | TOKEN_HANDLE
                 | TOKEN_BOOL => {
                     // inline variable declaration
@@ -249,8 +284,22 @@ pub fn find_constants<'a>(
                     let names = split_const_line(&rest);
 
                     for name in names {
-                        process_var_declaration(&name, table, line_number, &file_name)
+                        process_var_declaration(&name, table, line_number, stack_id)
                     }
+                }
+                TOKEN_FUNCTION => {
+                    // push new scope
+                    scope_stack.push(0);
+                }
+
+                TOKEN_IF | TOKEN_FOR | TOKEN_WHILE | TOKEN_SWITCH => {
+                    if stack_id < 2 {
+                        // global scope, only ends when the file ends
+                        continue;
+                    }
+                    let function_scope = scope_stack.last_mut().unwrap();
+                    // enter block
+                    *function_scope += 1;
                 }
                 _ => {}
             },
@@ -258,7 +307,7 @@ pub fn find_constants<'a>(
                 let declarations = split_const_line(line);
 
                 for declaration in declarations.iter() {
-                    process_const_declaration(&declaration, table, line_number, &file_name);
+                    process_const_declaration(&declaration, table, line_number, stack_id);
                 }
             }
             _ if class_names.contains(&first) => {
@@ -267,7 +316,7 @@ pub fn find_constants<'a>(
                 let names = split_const_line(&rest);
 
                 for name in names {
-                    process_var_declaration(&name, table, line_number, &file_name)
+                    process_var_declaration(&name, table, line_number, stack_id)
                 }
             }
             _ => {
@@ -281,20 +330,22 @@ pub fn process_const_declaration(
     line: &str,
     table: &mut SymbolTable,
     line_number: usize,
-    file_name: &Option<String>,
+    stack_id: u32,
 ) {
     let mut tokens = line.split('=');
 
     let Some(name) = tokens.next() else { return };
     let name = name.trim();
     let name_lower = name.to_ascii_lowercase();
-    if table.symbols.contains_key(&name_lower) {
-        log::debug!(
-            "Found duplicate const declaration {} in line {}",
-            name,
-            line_number + 1
-        );
-        return;
+    if let Some(symbol) = table.symbols.get(&name_lower) {
+        if symbol.stack_id == stack_id {
+            log::debug!(
+                "Found duplicate const declaration {} in line {}",
+                name,
+                line_number + 1
+            );
+            return;
+        }
     }
 
     let Some(value) = tokens.next() else { return };
@@ -311,7 +362,8 @@ pub fn process_const_declaration(
         SymbolInfoMap {
             line_number: line_number as u32,
             _type,
-            file_name: file_name.clone(),
+            stack_id,
+            end_line_number: 0,
             value: Some(String::from(value)),
             name_no_format: name.to_string(),
         },
@@ -322,7 +374,7 @@ pub fn process_var_declaration(
     line: &str,
     table: &mut SymbolTable,
     line_number: usize,
-    file_name: &Option<String>,
+    stack_id: u32,
 ) {
     let mut tokens = line.split('=');
 
@@ -334,21 +386,25 @@ pub fn process_var_declaration(
 
     let name = name.trim();
     let name_lower = name.to_ascii_lowercase();
-    if table.symbols.contains_key(&name_lower) {
-        log::debug!(
-            "Found duplicate var declaration {} in line {}",
-            name,
-            line_number + 1
-        );
-        return;
+    if let Some(symbol) = table.symbols.get(&name_lower) {
+        if symbol.stack_id == stack_id {
+            log::debug!(
+                "Found duplicate var declaration {} in line {}",
+                name,
+                line_number + 1
+            );
+            return;
+        }
     }
     // todo: try_insert
+    // todo: value should be vector of SymbolInfoMap for each possible scope (functions may declare the same variable name)
     table.symbols.insert(
         name_lower,
         SymbolInfoMap {
             line_number: line_number as u32,
             _type: SymbolType::Var,
-            file_name: file_name.clone(),
+            stack_id,
+            end_line_number: 0,
             value: None,
             name_no_format: name.to_string(),
         },

@@ -110,12 +110,23 @@ impl LanguageServer {
             .collect::<Vec<_>>();
     }
 
-    pub fn find(&mut self, symbol: &str, handle: EditorHandle) -> Option<SymbolInfo> {
+    pub fn find(
+        &mut self,
+        symbol: &str,
+        handle: EditorHandle,
+        line_number: u32,
+    ) -> Option<SymbolInfo> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
         let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
+
+        // check if symbol is visible in current scope in current line
+        if !map.is_visible(line_number) {
+            return None;
+        }
         Some(SymbolInfo {
             line_number: map.line_number,
+            end_line_number: map.end_line_number,
             _type: map._type,
             value: map.value.clone(),
         })
@@ -131,6 +142,7 @@ impl LanguageServer {
         &self,
         needle: &str,
         handle: EditorHandle,
+        line_number: u32,
     ) -> Option<Vec<(String, String)>> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
@@ -140,8 +152,7 @@ impl LanguageServer {
                 .symbols
                 .iter()
                 .filter_map(|(name, map)| {
-                    name.to_ascii_lowercase()
-                        .starts_with(&needle)
+                    (name.to_ascii_lowercase().starts_with(&needle) && map.is_visible(line_number))
                         .then_some((map.name_no_format.clone(), map.value.clone()?.clone()))
                 })
                 .collect::<Vec<_>>(),
@@ -259,6 +270,7 @@ impl LanguageServer {
             let classes = classes.get(&handle).unwrap_or(&v);
 
             let mut visited = HashSet::new();
+            let mut scope_stack = vec![0];
             scanner::scan_document(
                 &text,
                 &dict,
@@ -267,10 +279,11 @@ impl LanguageServer {
                 &classes,
                 &mut table,
                 &mut visited,
+                &mut scope_stack,
             );
             LanguageServer::update_watchers(&visited, handle);
 
-            log::debug!("Symbol table is ready: {} symbols", table.symbols.len());
+            log::debug!("Symbol table is ready: {:?} symbols", table.symbols);
 
             symbol_table.insert(handle, table);
             status_change(handle, Status::Idle);

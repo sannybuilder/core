@@ -15,14 +15,16 @@ pub enum SymbolType {
     ModelName = 4,
 }
 pub struct SymbolInfo {
-    pub line_number: u32,
+    pub line_number: u32,     // defined on this line
+    pub end_line_number: u32, // not visible on and after this line
     pub _type: SymbolType,
-    pub value: Option<String>,
+    pub value: Option<String>, // value of the symbol (for literals)
 }
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct SymbolInfoRaw {
     pub line_number: u32,
+    pub end_line_number: u32,
     pub _type: SymbolType,
     pub value: PChar,
 }
@@ -33,12 +35,21 @@ pub struct DocumentInfo {
 
 #[derive(Clone, Debug)]
 pub struct SymbolInfoMap {
-    pub file_name: Option<String>,
     pub line_number: u32,
+    pub stack_id: u32,
+    pub end_line_number: u32,
     pub _type: SymbolType,
     pub value: Option<String>,
     pub name_no_format: String, // used for autocomplete
 }
+
+impl SymbolInfoMap {
+    pub fn is_visible(&self, line_number: u32) -> bool {
+        line_number >= self.line_number
+            && (self.end_line_number == 0 || line_number < self.end_line_number)
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
@@ -80,9 +91,9 @@ pub unsafe extern "C" fn language_service_client_connect_with_file(
 ) -> bool {
     boolclosure! {{
         server.as_mut()?.connect(
-            Source::File(pchar_to_string(file_name)?), 
-            handle, 
-            pchar_to_str(static_constants_file)?, 
+            Source::File(pchar_to_string(file_name)?),
+            handle,
+            pchar_to_str(static_constants_file)?,
             pchar_to_str(classes_file)?
         );
         Some(())
@@ -98,8 +109,8 @@ pub unsafe extern "C" fn language_service_client_connect_in_memory(
 ) -> bool {
     boolclosure! {{
         server.as_mut()?.connect(
-            Source::Memory, 
-            handle, 
+            Source::Memory,
+            handle,
             pchar_to_str(static_constants_file)?,
             pchar_to_str(classes_file)?
         );
@@ -134,14 +145,16 @@ pub unsafe extern "C" fn language_service_find(
     server: *mut LanguageServer,
     symbol: PChar,
     handle: EditorHandle,
+    line_number: u32,
     out_value: *mut SymbolInfoRaw,
 ) -> bool {
     boolclosure! {{
         let server = server.as_mut()?;
-        let s = server.find(pchar_to_str(symbol)?, handle)?;
+        let s = server.find(pchar_to_str(symbol)?, handle, line_number)?;
         let out_value = out_value.as_mut()?;
         out_value._type = s._type;
         out_value.line_number = s.line_number;
+        out_value.end_line_number = s.end_line_number;
         out_value.value = CString::new(s.value.unwrap_or_default()).unwrap().into_raw();
         Some(())
     }}
@@ -162,10 +175,11 @@ pub unsafe extern "C" fn language_service_filter_constants_by_name(
     server: *mut LanguageServer,
     handle: EditorHandle,
     needle: PChar,
+    line_number: u32,
     dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
-        let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle)?;
+        let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle, line_number)?;
         for item in items {
             dict.as_mut()?.add(CString::new(item.0).ok()?, CString::new(item.1).ok()?)
         }
