@@ -1,8 +1,9 @@
 use crate::parser::interface::*;
 use nom::bytes::complete::{tag, tag_no_case};
-use nom::combinator::map;
-use nom::multi::many1;
-use nom::sequence::{delimited, separated_pair};
+use nom::character::complete::space1;
+use nom::combinator::{map, opt};
+use nom::multi::{many1, separated_list0, separated_list1};
+use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
 use nom::{branch::alt, combinator::consumed};
 use nom::{character::complete::multispace0, sequence::terminated};
 
@@ -13,6 +14,85 @@ use crate::parser::statement;
 
 pub fn declaration(s: Span) -> R<Node> {
     terminated(alt((statement::statement, const_declaration)), multispace0)(s)
+}
+
+pub fn function_signature(s: Span) -> R<FunctionSignature> {
+    map(
+        consumed(helpers::line(tuple((
+            helpers::ws(terminated(tag_no_case("function"), space1)),
+            helpers::ws(literal::identifier),
+            function_arguments_and_return_types,
+        )))),
+        |(span, (_, name, (parameters, return_types)))| FunctionSignature {
+            name,
+            parameters,
+            return_types,
+            token: Token::from(span, SyntaxKind::FunctionSignature),
+        },
+    )(s)
+}
+
+pub fn function_arguments_and_return_types(
+    s: Span,
+) -> R<(Vec<FunctionParameter>, Vec<FunctionReturnType>)> {
+    map(
+        tuple((
+            helpers::ws(opt(function_arguments)),
+            helpers::ws(opt(function_return_types)),
+        )),
+        |(parameters, return_types)| {
+            (
+                parameters.unwrap_or_default(),
+                return_types.unwrap_or_default(),
+            )
+        },
+    )(s)
+}
+
+fn function_arguments(s: Span) -> R<Vec<FunctionParameter>> {
+    map(
+        delimited(
+            helpers::ws(tag("(")),
+            separated_list0(
+                helpers::ws(tag(",")),
+                consumed(pair(
+                    opt(terminated( // param names are optional in define function
+                        helpers::ws(literal::identifier),
+                        helpers::ws(tag(":")),
+                    )),
+                    helpers::ws(literal::identifier),
+                )),
+            ),
+            helpers::ws(tag(")")),
+        ),
+        |args| {
+            args.into_iter()
+                .map(|(span, (name, _type))| FunctionParameter {
+                    name,
+                    _type,
+                    token: Token::from(span, SyntaxKind::LocalVariable),
+                })
+                .collect()
+        },
+    )(s)
+}
+
+fn function_return_types(s: Span) -> R<Vec<FunctionReturnType>> {
+    map(
+        preceded(
+            helpers::ws(tag(":")),
+            separated_list1(helpers::ws(tag(",")), helpers::ws(literal::identifier)),
+        ),
+        |types| {
+            types
+                .into_iter()
+                .map(|_type| FunctionReturnType {
+                    token: _type.clone(),
+                    _type,
+                })
+                .collect()
+        },
+    )(s)
 }
 
 pub fn const_declaration(s: Span) -> R<Node> {
@@ -106,5 +186,319 @@ end"#,
                 }
             })
         )
+    }
+
+    #[test]
+    fn test_function_signature() {
+        let (_, node) = function_signature(Span::from(r#" function foo "#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 11,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![],
+                token: Token {
+                    start: 1,
+                    len: 14,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo: string"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![FunctionReturnType {
+                    token: Token {
+                        start: 15,
+                        len: 6,
+                        syntax_kind: SyntaxKind::Identifier
+                    },
+                    _type: Token {
+                        start: 15,
+                        len: 6,
+                        syntax_kind: SyntaxKind::Identifier
+                    }
+                }],
+                token: Token {
+                    start: 1,
+                    len: 20,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo()"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![],
+                token: Token {
+                    start: 1,
+                    len: 14,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo(): int"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![FunctionReturnType {
+                    token: Token {
+                        start: 17,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    },
+                    _type: Token {
+                        start: 17,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    }
+                }],
+                token: Token {
+                    start: 1,
+                    len: 19,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo(a: int): int"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![FunctionParameter {
+                    name: Some(Token {
+                        start: 14,
+                        len: 1,
+                        syntax_kind: SyntaxKind::Identifier
+                    }),
+                    _type: Token {
+                        start: 17,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    },
+                    token: Token {
+                        start: 14,
+                        len: 6,
+                        syntax_kind: SyntaxKind::LocalVariable
+                    }
+                }],
+                return_types: vec![FunctionReturnType {
+                    token: Token {
+                        start: 23,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    },
+                    _type: Token {
+                        start: 23,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    }
+                }],
+                token: Token {
+                    start: 1,
+                    len: 25,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) =
+            function_signature(Span::from(r#"function foo(a: int, b: string): int"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![
+                    FunctionParameter {
+                        name: Some(Token {
+                            start: 14,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        }),
+                        _type: Token {
+                            start: 17,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        token: Token {
+                            start: 14,
+                            len: 6,
+                            syntax_kind: SyntaxKind::LocalVariable
+                        }
+                    },
+                    FunctionParameter {
+                        name: Some(Token {
+                            start: 22,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        }),
+                        _type: Token {
+                            start: 25,
+                            len: 6,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        token: Token {
+                            start: 22,
+                            len: 9,
+                            syntax_kind: SyntaxKind::LocalVariable
+                        }
+                    }
+                ],
+                return_types: vec![FunctionReturnType {
+                    token: Token {
+                        start: 34,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    },
+                    _type: Token {
+                        start: 34,
+                        len: 3,
+                        syntax_kind: SyntaxKind::Identifier
+                    }
+                }],
+                token: Token {
+                    start: 1,
+                    len: 36,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(
+            r#"function foo(a: int, b: string): int, int, int"#,
+        ))
+        .unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![
+                    FunctionParameter {
+                        name: Some(Token {
+                            start: 14,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        }),
+                        _type: Token {
+                            start: 17,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        token: Token {
+                            start: 14,
+                            len: 6,
+                            syntax_kind: SyntaxKind::LocalVariable
+                        }
+                    },
+                    FunctionParameter {
+                        name: Some(Token {
+                            start: 22,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        }),
+                        _type: Token {
+                            start: 25,
+                            len: 6,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        token: Token {
+                            start: 22,
+                            len: 9,
+                            syntax_kind: SyntaxKind::LocalVariable
+                        }
+                    }
+                ],
+                return_types: vec![
+                    FunctionReturnType {
+                        token: Token {
+                            start: 34,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: Token {
+                            start: 34,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        }
+                    },
+                    FunctionReturnType {
+                        token: Token {
+                            start: 39,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: Token {
+                            start: 39,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        }
+                    },
+                    FunctionReturnType {
+                        token: Token {
+                            start: 44,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: Token {
+                            start: 44,
+                            len: 3,
+                            syntax_kind: SyntaxKind::Identifier
+                        }
+                    }
+                ],
+                token: Token {
+                    start: 1,
+                    len: 46,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
     }
 }

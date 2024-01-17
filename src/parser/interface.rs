@@ -15,6 +15,7 @@ pub enum SyntaxKind {
     BinaryExpr,
     ConstDeclaration,
     ConstInitialization,
+    FunctionSignature,
 
     OperatorBitwiseNot,            // ~
     OperatorBitwiseAnd,            // &
@@ -78,6 +79,7 @@ pub enum Node {
     /// Unary expression, e.g. `~var`
     Unary(UnaryPrefixExpr),
     ConstDeclaration(ConstDeclaration),
+    FunctionSignature(FunctionSignature),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -194,6 +196,25 @@ pub enum VariableType {
 #[derive(Debug, PartialEq)]
 pub struct AST {
     pub body: Vec<Node>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionSignature {
+    pub name: Token,
+    pub parameters: Vec<FunctionParameter>,
+    pub return_types: Vec<FunctionReturnType>,
+    pub token: Token,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionParameter {
+    pub name: Option<Token>,
+    pub _type: Token,
+    pub token: Token,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionReturnType {
+    pub _type: Token,
+    pub token: Token,
 }
 
 pub type Span<'a> = LocatedSpan<&'a str>;

@@ -1,7 +1,10 @@
 use super::{
-    ffi::{DocumentInfo, EditorHandle, Source, Status, SymbolInfo},
+    ffi::{DocumentInfo, EditorHandle, Source, Status},
     watcher::FileWatcher,
-    {scanner, symbol_table::SymbolTable},
+    {
+        scanner,
+        symbol_table::{SymbolInfoMap, SymbolTable},
+    },
 };
 use crate::{
     dictionary::{config, ffi::CaseFormat, DictNumByString},
@@ -115,21 +118,18 @@ impl LanguageServer {
         symbol: &str,
         handle: EditorHandle,
         line_number: u32,
-    ) -> Option<SymbolInfo> {
+    ) -> Option<SymbolInfoMap> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
-        let map = table.symbols.get(&symbol.to_ascii_lowercase())?;
+        let symbol_infos = table.symbols.get(&symbol.to_ascii_lowercase())?;
 
-        // check if symbol is visible in current scope in current line
-        if !map.is_visible(line_number) {
-            return None;
+        for symbol_info in symbol_infos {
+            if symbol_info.is_visible_at(line_number) {
+                // check if symbol is visible in current scope in current line
+                return Some(symbol_info.clone());
+            }
         }
-        Some(SymbolInfo {
-            line_number: map.line_number,
-            end_line_number: map.end_line_number,
-            _type: map._type,
-            value: map.value.clone(),
-        })
+        None
     }
 
     pub fn get_document_info(&self, handle: EditorHandle) -> DocumentInfo {
@@ -143,20 +143,27 @@ impl LanguageServer {
         needle: &str,
         handle: EditorHandle,
         line_number: u32,
-    ) -> Option<Vec<(String, String)>> {
+    ) -> Option<Vec<String>> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
         let needle = needle.to_ascii_lowercase();
-        Some(
-            table
-                .symbols
-                .iter()
-                .filter_map(|(name, map)| {
-                    (name.to_ascii_lowercase().starts_with(&needle) && map.is_visible(line_number))
-                        .then_some((map.name_no_format.clone(), map.value.clone()?.clone()))
-                })
-                .collect::<Vec<_>>(),
-        )
+
+        let list = table
+            .symbols
+            .iter()
+            .filter_map(|(name, map)| {
+                if name.to_ascii_lowercase().starts_with(&needle) {
+                    for symbol_info in map {
+                        if symbol_info.is_visible_at(line_number) {
+                            return Some(name.clone());
+                        }
+                    }
+                }
+                return None;
+            })
+            .collect::<Vec<_>>();
+        // list.sort_by(|v1, v2| v1.0.cmp(&v2.0));
+        Some(list)
     }
 
     fn setup_message_queue() -> Sender<(EditorHandle, String)> {
@@ -282,8 +289,6 @@ impl LanguageServer {
                 &mut scope_stack,
             );
             LanguageServer::update_watchers(&visited, handle);
-
-            log::debug!("Symbol table is ready: {:?} symbols", table.symbols);
 
             symbol_table.insert(handle, table);
             status_change(handle, Status::Idle);

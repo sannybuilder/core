@@ -3,51 +3,22 @@ use std::ffi::CString;
 use crate::{
     common_ffi::{pchar_to_str, pchar_to_string, ptr_free, ptr_new, PChar},
     language_service::server::LanguageServer,
+    v4::helpers::token_str,
 };
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum SymbolType {
-    Number = 0,
-    String = 1,
-    Var = 2,
-    Label = 3,
-    ModelName = 4,
-}
-pub struct SymbolInfo {
-    pub line_number: u32,     // defined on this line
-    pub end_line_number: u32, // not visible on and after this line
-    pub _type: SymbolType,
-    pub value: Option<String>, // value of the symbol (for literals)
-}
+use super::symbol_table::SymbolType;
+
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct SymbolInfoRaw {
-    pub line_number: u32,
-    pub end_line_number: u32,
     pub _type: SymbolType,
     pub value: PChar,
+    pub name_no_format: PChar,
+    pub annotation: PChar,
 }
 
 pub struct DocumentInfo {
     pub is_active: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct SymbolInfoMap {
-    pub line_number: u32,
-    pub stack_id: u32,
-    pub end_line_number: u32,
-    pub _type: SymbolType,
-    pub value: Option<String>,
-    pub name_no_format: String, // used for autocomplete
-}
-
-impl SymbolInfoMap {
-    pub fn is_visible(&self, line_number: u32) -> bool {
-        line_number >= self.line_number
-            && (self.end_line_number == 0 || line_number < self.end_line_number)
-    }
 }
 
 #[repr(C)]
@@ -153,9 +124,14 @@ pub unsafe extern "C" fn language_service_find(
         let s = server.find(pchar_to_str(symbol)?, handle, line_number)?;
         let out_value = out_value.as_mut()?;
         out_value._type = s._type;
-        out_value.line_number = s.line_number;
-        out_value.end_line_number = s.end_line_number;
+
+        // don't return line numbers as they are not used on the client side
+        // out_value.line_number = s.line_number;
+        // out_value.end_line_number = s.end_line_number;
+
         out_value.value = CString::new(s.value.unwrap_or_default()).unwrap().into_raw();
+        out_value.name_no_format = CString::new(s.name_no_format).unwrap().into_raw();
+        out_value.annotation = CString::new(s.annotation.unwrap_or_default()).unwrap().into_raw();
         Some(())
     }}
 }
@@ -181,8 +157,45 @@ pub unsafe extern "C" fn language_service_filter_constants_by_name(
     boolclosure! {{
         let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle, line_number)?;
         for item in items {
-            dict.as_mut()?.add(CString::new(item.0).ok()?, CString::new(item.1).ok()?)
+            dict.as_mut()?.add(CString::new(item).ok()?, CString::new("").ok()?) // todo: use simple list instead of dict
         }
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn language_service_format_function_signature(
+    server: *mut LanguageServer,
+    value: PChar,
+    out: *mut PChar,
+) -> bool {
+    boolclosure! {{
+        let _server = server.as_mut()?;
+        use crate::parser::{function_arguments_and_return_types, Span};
+
+        let line = pchar_to_str(value)?;
+        let (_, ref signature) = function_arguments_and_return_types(Span::from(line)).ok()?;
+
+        let params = signature.0
+            .iter()
+            .map(|param|{
+                let type_token = token_str(line, &param._type);
+                let name_token = param.name.as_ref().map(|name| token_str(line, name));
+
+                match name_token {
+                    Some(name) => format!("\"{}: {}\"", name, type_token),
+                    None => format!("\"{}\"", type_token),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        // let return_types = signature.1
+        //     .iter()
+        //     .map(|ret_type| format!("\"{}\"", token_str(line, &ret_type.token)))
+        //     .collect::<Vec<_>>()
+        //     .join(", ");
+        *out = CString::new(format!("{params}")).unwrap().into_raw();
         Some(())
     }}
 }

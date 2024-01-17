@@ -3,7 +3,7 @@ use nom::combinator::map;
 use nom::multi::many1;
 
 pub mod interface;
-use interface::*;
+pub use interface::*;
 
 mod binary;
 mod declaration;
@@ -14,6 +14,8 @@ mod operator;
 mod statement;
 mod unary;
 mod variable;
+
+pub use declaration::{function_signature, function_arguments_and_return_types}; // used in LanguageService
 
 pub fn parse(s: &str) -> R<AST> {
     all_consuming(map(many1(declaration::declaration), |body| AST { body }))(Span::from(s))
