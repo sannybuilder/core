@@ -15,6 +15,7 @@ pub mod sdk;
 pub mod update_service;
 pub mod utils;
 pub mod v4;
+pub mod source_map;
 
 #[ctor]
 fn main() {
