@@ -43,7 +43,10 @@ impl UpdateService {
         std::thread::spawn(move || {
             let result = match auto_update(v) {
                 Ok(v) => std::ffi::CString::new(v).unwrap(),
-                Err(_) => std::ffi::CString::new("").unwrap(),
+                Err(e) => {
+                    log::error!("{}", e);
+                    std::ffi::CString::new("").unwrap()
+                }
             };
             (status_change)(result.as_ptr());
         });
@@ -71,6 +74,7 @@ impl UpdateService {
 
 fn get_file_gracefully(game: String, file_name: &str) -> Result<String, Box<dyn Error>> {
     let url = format!("{}/{}/{}", RAW_CONTENT, game, file_name);
+    log::info!("Downloading {}", url.as_str());
     match super::http_client::get_string(url.as_str()) {
         Some(s) => Ok(s),
         None => get_file_with_api(game, file_name),
@@ -118,6 +122,8 @@ fn get_file_name<'a>(game: &str) -> Option<&'a str> {
         "sa" => Some("sa.json"),
         "sa_mobile" => Some("sa_mobile.json"),
         "vc_mobile" => Some("vc_mobile.json"),
+        // "lcs" => Some("lcs.json"),
+        // "vcs" => Some("vcs.json"),
         _ => None,
     }
 }
@@ -134,12 +140,15 @@ fn download(game: String, destination: Option<String>) -> Result<String, Box<dyn
 fn auto_update(options: Vec<(String, String, Option<String>)>) -> Result<String, Box<dyn Error>> {
     let mut versions: String = String::new();
     for (game, version, destination) in options {
-        let v = match get_file_gracefully(game.clone(), "version.txt") {
-            Ok(x) => x,
-            Err(_) => continue,
+        let Some(file_name) = get_file_name(&game) else {
+            log::error!("Unsupported game {game}");
+            continue;
+        };
+        let Ok(v) = get_file_gracefully(game.clone(), "version.txt") else {
+            log::error!("Can't get version for {game}");
+            continue;
         };
 
-        let file_name = get_file_name(&game).ok_or("Unsupported game")?;
         let destination = destination.unwrap_or(file_name.to_owned());
         let remote_version = Version::from(v.as_str());
         let local_version = Version::from(version.as_str());

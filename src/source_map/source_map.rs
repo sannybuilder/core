@@ -31,6 +31,16 @@ impl SourceMap {
         file.get(&line).cloned()
     }
 
+    pub fn get_line(&self, path: &str, offset: u32) -> Option<u32> {
+        let file = self.files.get(path)?;
+        for (line, off) in file.iter() {
+            if *off == offset {
+                return Some(*line);
+            }
+        }
+        None
+    }
+
     pub fn adjust_offset_by(&mut self, delta: u32) {
         for file in self.files.values_mut() {
             for offset in file.values_mut() {

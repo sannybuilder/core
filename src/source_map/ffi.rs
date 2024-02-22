@@ -49,6 +49,21 @@ pub unsafe extern "C" fn source_map_get_offset(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn source_map_get_line(
+    map: *mut SourceMap,
+    path: PChar,
+    offset: u32,
+    out: *mut u32,
+) -> bool {
+    boolclosure!({
+        let path = pchar_to_str(path)?;
+        *out = (*map).get_line(path, offset)?;
+        Some(())
+    })
+}
+
+
+#[no_mangle]
 pub unsafe extern "C" fn source_map_adjust_offset_by(map: *mut SourceMap, delta: u32) {
     (*map).adjust_offset_by(delta);
 }
