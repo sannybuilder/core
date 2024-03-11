@@ -3,7 +3,7 @@ use nom::combinator::map;
 use nom::multi::many1;
 
 pub mod interface;
-use interface::*;
+pub use interface::*;
 
 mod binary;
 mod declaration;
@@ -14,6 +14,8 @@ mod operator;
 mod statement;
 mod unary;
 mod variable;
+
+pub use declaration::{function_signature, function_arguments_and_return_types}; // used in LanguageService
 
 pub fn parse(s: &str) -> R<AST> {
     all_consuming(map(many1(declaration::declaration), |body| AST { body }))(Span::from(s))
@@ -87,6 +89,36 @@ mod tests {
     #[test]
     fn test_hex() {
         let (_, ast) = parse("0x100").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 1,
+                    len: 5,
+                    syntax_kind: SyntaxKind::IntegerLiteral
+                })]
+            }
+        );
+    }
+
+    #[test]
+    fn test_label() {
+        let (_, ast) = parse("@label123").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Literal(Token {
+                    start: 1,
+                    len: 9,
+                    syntax_kind: SyntaxKind::LabelLiteral
+                })]
+            }
+        );
+    }
+
+    #[test]
+    fn test_binary() {
+        let (_, ast) = parse("0b101").unwrap();
         assert_eq!(
             ast,
             AST {

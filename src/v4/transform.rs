@@ -1,6 +1,6 @@
 use super::helpers::*;
 use crate::{
-    dictionary::{dictionary_num_by_str::DictNumByStr, dictionary_str_by_str::DictStrByStr},
+    dictionary::dictionary_str_by_str::DictStrByStr,
     legacy_ini::OpcodeTable,
     namespaces::namespaces::Namespaces,
     parser::{
@@ -50,22 +50,21 @@ static OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_LVAR: &'static str =
 static OP_SUB_TIMED_FLOAT_VAR_FROM_FLOAT_LVAR: &'static str = "SUB_TIMED_FLOAT_VAR_FROM_FLOAT_LVAR";
 static OP_SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_VAR: &'static str = "SUB_TIMED_FLOAT_LVAR_FROM_FLOAT_VAR";
 
-static OP_CSET_VAR_INT_TO_VAR_FLOAT: &'static str = "CSET_VAR_INT_TO_VAR_FLOAT";
-static OP_CSET_VAR_FLOAT_TO_VAR_INT: &'static str = "CSET_VAR_FLOAT_TO_VAR_INT";
-static OP_CSET_LVAR_INT_TO_VAR_FLOAT: &'static str = "CSET_LVAR_INT_TO_VAR_FLOAT";
-static OP_CSET_LVAR_FLOAT_TO_VAR_INT: &'static str = "CSET_LVAR_FLOAT_TO_VAR_INT";
+// static OP_CSET_VAR_INT_TO_VAR_FLOAT: &'static str = "CSET_VAR_INT_TO_VAR_FLOAT";
+// static OP_CSET_VAR_FLOAT_TO_VAR_INT: &'static str = "CSET_VAR_FLOAT_TO_VAR_INT";
+// static OP_CSET_LVAR_INT_TO_VAR_FLOAT: &'static str = "CSET_LVAR_INT_TO_VAR_FLOAT";
+// static OP_CSET_LVAR_FLOAT_TO_VAR_INT: &'static str = "CSET_LVAR_FLOAT_TO_VAR_INT";
 
-static OP_CSET_VAR_INT_TO_LVAR_FLOAT: &'static str = "CSET_VAR_INT_TO_LVAR_FLOAT";
-static OP_CSET_VAR_FLOAT_TO_LVAR_INT: &'static str = "CSET_VAR_FLOAT_TO_LVAR_INT";
-static OP_CSET_LVAR_INT_TO_LVAR_FLOAT: &'static str = "CSET_LVAR_INT_TO_LVAR_FLOAT";
-static OP_CSET_LVAR_FLOAT_TO_LVAR_INT: &'static str = "CSET_LVAR_FLOAT_TO_LVAR_INT";
+// static OP_CSET_VAR_INT_TO_LVAR_FLOAT: &'static str = "CSET_VAR_INT_TO_LVAR_FLOAT";
+// static OP_CSET_VAR_FLOAT_TO_LVAR_INT: &'static str = "CSET_VAR_FLOAT_TO_LVAR_INT";
+// static OP_CSET_LVAR_INT_TO_LVAR_FLOAT: &'static str = "CSET_LVAR_INT_TO_LVAR_FLOAT";
+// static OP_CSET_LVAR_FLOAT_TO_LVAR_INT: &'static str = "CSET_LVAR_FLOAT_TO_LVAR_INT";
 
 pub fn try_tranform(
     ast: &AST,
     expr: &str,
     ns: &Namespaces,
     legacy_ini: &OpcodeTable,
-    var_types: &DictNumByStr,
     const_lookup: &DictStrByStr,
 ) -> Option<String> {
     let e = ast.body.get(0)?;
@@ -73,7 +72,9 @@ pub fn try_tranform(
     macro_rules! resolve {
         ($node: expr) => {{
             let x = |token| -> Option<(Node, String)> {
-                let name = token_str(expr, token);
+                // keys in DictStrByStr are lower-case
+                let name = token_str(expr, token).to_ascii_lowercase();
+
                 let const_value = const_lookup
                     .map
                     .get(&CString::new(name).unwrap())
@@ -145,8 +146,8 @@ pub fn try_tranform(
                         return None;
                     }
                     let (var, var_name) = resolve!(left);
-                    let (operand, operand_name) = resolve!(&unary.operand);
-                    if !is_variable(&var) || !is_variable(&operand) {
+                    let (_, operand_name) = resolve!(&unary.operand);
+                    if !is_variable(&var) {
                         return None;
                     }
                     // var = ~var
@@ -306,98 +307,89 @@ pub fn try_tranform(
                                 }
                             }
                         }
-                        SyntaxKind::OperatorCastEqual => {
-                            // requires type info
-                            if !is_variable(&right_operand) {
-                                return None;
-                            }
-                            let t1 = *var_types.map.get(&var_name)?;
-                            let t2 = *var_types.map.get(&right_operand_name)?;
+                        // SyntaxKind::OperatorCastEqual => {
+                        //     // requires type info
+                        //     if !is_variable(&right_operand) {
+                        //         return None;
+                        //     }
+                        //     let left_var = as_variable(&var)?;
+                        //     let right_var = as_variable(&right_operand)?;
 
-                            use crate::utils::compiler_const::*;
-                            let left_var = as_variable(&var)?;
-                            match right_token.syntax_kind {
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // var =# var // int = float
-                                    return op(OP_CSET_VAR_INT_TO_VAR_FLOAT);
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    op(OP_CSET_VAR_FLOAT_TO_VAR_INT)
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // lvar =# lvar // int = float
-                                    return op(OP_CSET_LVAR_INT_TO_LVAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // lvar =# lvar // float = int
-                                    return op(OP_CSET_LVAR_FLOAT_TO_LVAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // lvar =# var // int = float
-                                    return op(OP_CSET_LVAR_INT_TO_VAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::GlobalVariable
-                                    if left_var.is_local()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // lvar =# var // float = int
-                                    return op(OP_CSET_LVAR_FLOAT_TO_VAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_INT
-                                        && t2 == TOKEN_FLOAT =>
-                                {
-                                    // var =# lvar // int = float
-                                    return op(OP_CSET_VAR_INT_TO_LVAR_FLOAT)
-                                        .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT)); // vcs
-                                }
-                                SyntaxKind::LocalVariable
-                                    if left_var.is_global()
-                                        && t1 == TOKEN_FLOAT
-                                        && t2 == TOKEN_INT =>
-                                {
-                                    // var =# lvar // float = int
-                                    return op(OP_CSET_VAR_FLOAT_TO_LVAR_INT)
-                                        .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT)); // vcs
-                                }
+                        //     let l1 =
+                        //         &CString::new(token_str(expr, left_var.get_var_name())).unwrap();
+                        //     let l2 =
+                        //         &CString::new(token_str(expr, right_var.get_var_name())).unwrap();
+                        //     let t1 = *var_types.map.get(l1)?;
+                        //     let t2 = *var_types.map.get(l2)?;
 
-                                _ => None,
-                            }
-                        }
+                        //     use crate::utils::compiler_const::*;
+                        //     if right_var.is_global() {
+                        //         if left_var.is_global() {
+                        //             if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                        //                 // var =# var // int = float
+                        //                 return op(OP_CSET_VAR_INT_TO_VAR_FLOAT);
+                        //             };
+                        //             if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                        //                 // var =# var // float = int
+                        //                 return op(OP_CSET_VAR_FLOAT_TO_VAR_INT);
+                        //             };
+                        //         }
+
+                        //         if left_var.is_local() {
+                        //             if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                        //                 // lvar =# var // int = float
+                        //                 return op(OP_CSET_LVAR_INT_TO_VAR_FLOAT)
+                        //                     .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                        //             }
+                        //             if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                        //                 // lvar =# var // float = int
+                        //                 return op(OP_CSET_LVAR_FLOAT_TO_VAR_INT)
+                        //                     .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                        //             }
+                        //         }
+                        //     }
+
+                        //     if right_var.is_local() {
+                        //         if left_var.is_local() {
+                        //             if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                        //                 // lvar =# lvar // int = float
+                        //                 return op(OP_CSET_LVAR_INT_TO_LVAR_FLOAT)
+                        //                     .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                        //             }
+
+                        //             if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                        //                 // lvar =# lvar // float = int
+                        //                 return op(OP_CSET_LVAR_FLOAT_TO_LVAR_INT)
+                        //                     .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                        //             }
+                        //         }
+
+                        //         if left_var.is_global() {
+                        //             if t1 == TOKEN_INT && t2 == TOKEN_FLOAT {
+                        //                 // var =# lvar // int = float
+                        //                 return op(OP_CSET_VAR_INT_TO_LVAR_FLOAT)
+                        //                     .or(op(OP_CSET_VAR_INT_TO_VAR_FLOAT));
+                        //             }
+
+                        //             if t1 == TOKEN_FLOAT && t2 == TOKEN_INT {
+                        //                 // var =# lvar // float = int
+                        //                 return op(OP_CSET_VAR_FLOAT_TO_LVAR_INT)
+                        //                     .or(op(OP_CSET_VAR_FLOAT_TO_VAR_INT));
+                        //             }
+                        //         }
+                        //     }
+
+                        //     return None;
+                        // }
                         SyntaxKind::OperatorEqual => {
                             let left_var = as_variable(&var)?;
                             let right_number = as_number(&right_operand)?;
 
                             match right_number.syntax_kind {
-                                
                                 // var = int
-                                SyntaxKind::IntegerLiteral if left_var.is_global() => {
+                                SyntaxKind::IntegerLiteral | SyntaxKind::LabelLiteral
+                                    if left_var.is_global() =>
+                                {
                                     op(OP_SET_VAR_INT)
                                 }
                                 // var = float
@@ -405,7 +397,9 @@ pub fn try_tranform(
                                     op(OP_SET_VAR_FLOAT)
                                 }
                                 // lvar = int
-                                SyntaxKind::IntegerLiteral if left_var.is_local() => {
+                                SyntaxKind::IntegerLiteral | SyntaxKind::LabelLiteral
+                                    if left_var.is_local() =>
+                                {
                                     op(OP_SET_LVAR_INT).or(op(OP_SET_VAR_INT))
                                 }
                                 // lvar = float

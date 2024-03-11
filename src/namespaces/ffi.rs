@@ -30,7 +30,7 @@ pub unsafe extern "C" fn classes_load_library(ns: *mut Namespaces, file_name: PC
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_short_description_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn classes_get_short_description_by_id(
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_is_condition_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut bool,
 ) -> bool {
     boolclosure! {{
@@ -54,7 +54,7 @@ pub unsafe extern "C" fn classes_get_is_condition_by_id(
 #[no_mangle]
 pub unsafe extern "C" fn classes_get_is_branch_by_id(
     ns: *mut Namespaces,
-    opcode: u16,
+    opcode: OpId,
     out: *mut bool,
 ) -> bool {
     boolclosure! {{
@@ -137,6 +137,18 @@ pub unsafe extern "C" fn classes_populate_keywords_dict3(
     boolclosure! {{
         let ns = ns.as_mut()?;
         ns.populate_keywords3(dict.as_mut()?);
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_populate_extension_list(
+    ns: *mut Namespaces,
+    dict: *mut crate::dictionary::dictionary_str_by_num::DictStrByNum,
+) -> bool {
+    boolclosure! {{
+        let ns = ns.as_mut()?;
+        ns.populate_extension_list(dict.as_mut()?);
         Some(())
     }}
 }
@@ -303,6 +315,30 @@ pub unsafe extern "C" fn classes_free(ns: *mut Namespaces) {
 pub unsafe extern "C" fn classes_get_library_version(ns: *mut Namespaces, out: *mut PChar) -> bool {
     boolclosure! {{
         *out = ns.as_mut()?.get_library_version().as_ptr();
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_input_count_by_id(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    out: *mut usize,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_input_count(opcode)?;
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_output_count_by_id(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    out: *mut usize,
+) -> bool {
+    boolclosure! {{
+        *out = ns.as_mut()?.get_output_count(opcode)?;
         Some(())
     }}
 }

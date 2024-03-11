@@ -75,7 +75,7 @@ pub fn as_number(node: &Node) -> Option<&Token> {
         Node::Literal(t)
             if matches!(
                 t.syntax_kind,
-                SyntaxKind::IntegerLiteral | SyntaxKind::FloatLiteral
+                SyntaxKind::IntegerLiteral | SyntaxKind::FloatLiteral | SyntaxKind::LabelLiteral
             ) =>
         {
             Some(t)
