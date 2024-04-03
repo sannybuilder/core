@@ -1,0 +1,9 @@
+{$CLEO .cs}
+nop
+
+{$I инк.txt}
+
+
+
+
+terminate_this_custom_script

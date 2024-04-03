@@ -121,7 +121,7 @@ pub unsafe extern "C" fn language_service_find(
 ) -> bool {
     boolclosure! {{
         let server = server.as_mut()?;
-        let s = server.find(pchar_to_str(symbol)?, handle, line_number)?;
+        let s = server.find(pchar_to_str(symbol)?, handle, line_number as usize)?;
         let out_value = out_value.as_mut()?;
         out_value._type = s._type;
 
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn language_service_filter_constants_by_name(
     dict: *mut crate::dictionary::dictionary_str_by_str::DictStrByStr,
 ) -> bool {
     boolclosure! {{
-        let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle, line_number)?;
+        let items = server.as_mut()?.filter_constants_by_name(pchar_to_str(needle)?, handle, line_number as usize)?;
         for item in items {
             dict.as_mut()?.add(CString::new(item).ok()?, CString::new("").ok()?) // todo: use simple list instead of dict
         }

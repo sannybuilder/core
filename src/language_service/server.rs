@@ -101,7 +101,7 @@ impl LanguageServer {
         let _drained = WATCHED_FILES
             .lock()
             .unwrap()
-            .drain_filter(|k, v| {
+            .extract_if(|k, v| {
                 v.remove(&handle);
                 if v.is_empty() {
                     LanguageServer::invalidate_file_cache(k);
@@ -117,7 +117,7 @@ impl LanguageServer {
         &mut self,
         symbol: &str,
         handle: EditorHandle,
-        line_number: u32,
+        line_number: usize,
     ) -> Option<SymbolInfoMap> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
@@ -142,7 +142,7 @@ impl LanguageServer {
         &self,
         needle: &str,
         handle: EditorHandle,
-        line_number: u32,
+        line_number: usize,
     ) -> Option<Vec<String>> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
@@ -196,7 +196,7 @@ impl LanguageServer {
 
         // remove handle from dereferenced files
         let _drained = watched_files
-            .drain_filter(|k, v| {
+            .extract_if(|k, v| {
                 if !tree.contains(k) && v.contains(&handle) {
                     v.remove(&handle);
                     if v.is_empty() {
@@ -235,7 +235,7 @@ impl LanguageServer {
         }
     }
 
-    fn invalidate_file_cache(file_name: &String) {
+    fn invalidate_file_cache(file_name: &str) {
         CACHE_FILE_SYMBOLS
             .lock()
             .unwrap()
@@ -247,11 +247,11 @@ impl LanguageServer {
     }
 
     /// Schedule scan for all clients referencing this file
-    fn rescan(file_name: &String) {
+    fn rescan(file_name: &str) {
         log::debug!("File {} has changed", file_name);
         let files = WATCHED_FILES.lock().unwrap();
 
-        if let Some(handles) = files.get(file_name.as_str()) {
+        if let Some(handles) = files.get(file_name) {
             log::debug!("Found {} dependent clients", handles.len());
             for &handle in handles {
                 status_change(handle, Status::PendingScan)
@@ -277,7 +277,7 @@ impl LanguageServer {
             let classes = classes.get(&handle).unwrap_or(&v);
 
             let mut visited = HashSet::new();
-            let mut scope_stack = vec![0];
+            let mut scope_stack = vec![(0, 0)];
             scanner::scan_document(
                 &text,
                 &dict,

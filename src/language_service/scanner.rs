@@ -1,25 +1,29 @@
 use super::ffi::Source;
-use super::symbol_table::{SymbolInfoMap, SymbolTable, SymbolType, VisibilityZone};
+use super::symbol_table::{SymbolInfoMap, SymbolTable, SymbolType};
 use crate::dictionary::DictNumByString;
 use crate::language_service::server::CACHE_FILE_SYMBOLS;
 use crate::parser::FunctionSignature;
 use crate::utils::compiler_const::*;
+use crate::utils::visibility_zone::VisibilityZone;
 use crate::v4::helpers::token_str;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
 fn file_walk(
-    file_name: &String,
+    file_name: &str,
     reserved_words: &DictNumByString,
     visited: &mut HashSet<String>,
     class_names: &Vec<String>,
     table: &mut SymbolTable,
-    scope_stack: &mut Vec<u32>,
+    scope_stack: &mut Vec<(
+        /*number of open blocks*/ u32,
+        /* scope start line*/ u32,
+    )>,
     line_number: Option<usize>,
 ) {
     // ignore cyclic paths
-    if !visited.insert(file_name.clone()) {
+    if !visited.insert(file_name.into()) {
         return;
     }
 
@@ -31,7 +35,9 @@ fn file_walk(
     }
 
     log::debug!("Symbol cache not found. Reading file {}", file_name);
-    let Ok(content) = fs::read_to_string(&file_name) else { return };
+    let Ok(content) = fs::read_to_string(&file_name) else {
+        return;
+    };
 
     // create a new table for this file and its descendants
     let mut local_table = SymbolTable::new();
@@ -39,7 +45,7 @@ fn file_walk(
         &content,
         reserved_words,
         class_names,
-        &Source::File(file_name.clone()),
+        &Source::File(file_name.into()),
         visited,
         scope_stack,
         &mut local_table,
@@ -51,7 +57,7 @@ fn file_walk(
     CACHE_FILE_SYMBOLS
         .lock()
         .unwrap()
-        .insert(file_name.clone(), local_table);
+        .insert(file_name.into(), local_table);
 }
 
 fn resolve_path(p: &str, parent_file: &Option<String>) -> Option<String> {
@@ -82,14 +88,14 @@ fn resolve_path(p: &str, parent_file: &Option<String>) -> Option<String> {
 /// if the file contains an include directive, recursively scan the included file
 /// also, scan all implicit includes (constants.txt)
 pub fn scan_document<'a>(
-    text: &String,
+    text: &str,
     reserved_words: &DictNumByString,
     implicit_includes: &Vec<String>,
     source: &Source,
     class_names: &Vec<String>,
     table: &mut SymbolTable,
     visited: &mut HashSet<String>,
-    scope_stack: &mut Vec<u32>,
+    scope_stack: &mut Vec<(u32, u32)>,
 ) {
     for file_name in implicit_includes {
         file_walk(
@@ -116,12 +122,12 @@ pub fn scan_document<'a>(
 }
 
 pub fn scan_text<'a>(
-    content: &String,
+    content: &str,
     reserved_words: &DictNumByString,
     class_names: &Vec<String>,
     source: &Source,
     visited: &mut HashSet<String>,
-    scope_stack: &mut Vec<u32>,
+    scope_stack: &mut Vec<(u32, u32)>,
     table: &mut SymbolTable,
     line_number: Option<usize>,
 ) {
@@ -182,7 +188,9 @@ pub fn scan_text<'a>(
                         rest.as_str()
                     };
 
-                    let Some(path) = resolve_path(include_path, &file_name) else { continue };
+                    let Some(path) = resolve_path(include_path, &file_name) else {
+                        continue;
+                    };
 
                     file_walk(
                         &path,
@@ -212,7 +220,7 @@ pub fn scan_text<'a>(
                         continue;
                     }
                     // number of nested blocks in the current function
-                    let fn_blocks = scope_stack.last_mut().unwrap();
+                    let (fn_blocks, _) = scope_stack.last_mut().unwrap();
                     if *fn_blocks == 0 {
                         // there are no other open blocks in this function, this is the function's end
 
@@ -220,7 +228,9 @@ pub fn scan_text<'a>(
                         for (_, symbols) in table.symbols.iter_mut() {
                             for symbol in symbols {
                                 if symbol.stack_id == stack_id {
-                                    let Some(last_zone) = symbol.zones.last_mut() else { continue };
+                                    let Some(last_zone) = symbol.zones.last_mut() else {
+                                        continue;
+                                    };
 
                                     if last_zone.end != 0 {
                                         // should not happen
@@ -232,7 +242,7 @@ pub fn scan_text<'a>(
                                     }
 
                                     // this local variable is not visible inside the function
-                                    last_zone.end = line_number as u32;
+                                    last_zone.end = line_number;
 
                                     symbol.stack_id = 0; // mark as processed
                                 }
@@ -247,7 +257,7 @@ pub fn scan_text<'a>(
                         for (_, symbols) in table.symbols.iter_mut() {
                             for symbol in symbols {
                                 if symbol.stack_id == stack_id && symbol._type == SymbolType::Var {
-                                    symbol.add_zone(line_number as u32)
+                                    symbol.add_zone(line_number)
                                 }
                             }
                         }
@@ -265,76 +275,87 @@ pub fn scan_text<'a>(
                         process_var_declaration(&name, table, line_number, stack_id, &first)
                     }
                 }
-                TOKEN_DEFINE => {
-                    // define function
-                    // todo: other defines?
+                // TOKEN_DEFINE => {
+                //     // define function
+                //     // todo: other defines?
 
-                    use crate::parser::{function_signature, Span};
+                //     use crate::parser::{function_signature, Span};
 
-                    // parse function signature and add its parameters to the symbol table as variables
-                    let Ok((_, ref signature)) = function_signature(Span::from(rest.as_str())) else { continue };
+                //     // parse function signature and add its parameters to the symbol table as variables
+                //     let Ok((_, ref signature)) = function_signature(Span::from(rest.as_str()))
+                //     else {
+                //         continue;
+                //     };
 
-                    register_function(
-                        table,
-                        line_number,
-                        stack_id,
-                        rest.as_str(),
-                        signature,
-                        next_annotation.take(),
-                    );
-                }
+                //     register_function(
+                //         table,
+                //         line_number,
+                //         stack_id,
+                //         rest.as_str(),
+                //         signature,
+                //         next_annotation.take(),
+                //     );
+                // }
                 TOKEN_FUNCTION => {
-                    // push new scope
-                    scope_stack.push(0);
-
-                    // end visibility zone for the local variables of the parent scope
-                    // because parent local variables can not be seen in functions
-                    // todo: make sure global vars is an exception
-                    for (_, symbols) in table.symbols.iter_mut() {
-                        for symbol in symbols {
-                            if symbol.stack_id == stack_id && symbol._type == SymbolType::Var {
-                                let Some(last_zone) = symbol.zones.last_mut() else { continue };
-
-                                if last_zone.end != 0 {
-                                    // should not happen
-                                    log::error!(
-                                        "Symbol {} does not have an open visibility zone",
-                                        symbol.name_no_format
-                                    );
-                                    continue;
-                                }
-
-                                last_zone.end = line_number as u32;
-                            }
-                        }
-                    }
+                    let scope_start_line = scope_stack.last().map(|(_, line)| *line).unwrap_or(0); // hoist the scope start line
 
                     use crate::parser::{function_signature, Span};
 
                     // parse function signature and add its parameters to the symbol table as variables
                     let line = first + " " + &rest;
                     let line = line.as_str();
-                    let Ok((_, ref signature)) = function_signature(Span::from(line)) else { continue };
+                    let Ok((_, ref signature)) = function_signature(Span::from(line)) else {
+                        continue;
+                    };
 
                     register_function(
                         table,
-                        line_number,
+                        scope_start_line as usize,
                         stack_id,
                         line,
                         signature,
                         next_annotation.take(),
                     );
 
-                    for param in &signature.parameters {
-                        if let Some(ref name) = param.name {
-                            register_var(
-                                table,
-                                line_number,
-                                stack_id + 1, // register function parameters in the function's stack
-                                token_str(&line, name),
-                                Some(token_str(&line, &param._type).to_string()),
-                                None,
-                            );
+                    // only local functions create new scope. foreign functions do not
+                    if signature.cc == crate::parser::FunctionCC::Local {
+                        // push new scope
+                        scope_stack.push((0, line_number as u32));
+
+                        // end visibility zone for the local variables of the parent scope
+                        // because parent local variables can not be seen in functions
+                        // todo: make sure global vars is an exception
+                        for (_, symbols) in table.symbols.iter_mut() {
+                            for symbol in symbols {
+                                if symbol.stack_id == stack_id && symbol._type == SymbolType::Var {
+                                    let Some(last_zone) = symbol.zones.last_mut() else {
+                                        continue;
+                                    };
+
+                                    if last_zone.end != 0 {
+                                        // should not happen
+                                        log::error!(
+                                            "Symbol {} does not have an open visibility zone",
+                                            symbol.name_no_format
+                                        );
+                                        continue;
+                                    }
+
+                                    last_zone.end = line_number;
+                                }
+                            }
+                        }
+                        for param in &signature.parameters {
+                            if let Some(ref name) = param.name {
+                                register_var(
+                                    table,
+                                    line_number,
+                                    stack_id + 1, // register function parameters in the function's stack
+                                    token_str(&line, name),
+                                    Some(token_str(&line, &param._type).to_string()),
+                                    None,
+                                );
+                            }
                         }
                     }
                 }
@@ -344,7 +365,7 @@ pub fn scan_text<'a>(
                         // global scope, only ends when the file ends
                         continue;
                     }
-                    let function_scope = scope_stack.last_mut().unwrap();
+                    let (function_scope, _) = scope_stack.last_mut().unwrap();
                     // enter block
                     *function_scope += 1;
                 }
@@ -408,7 +429,7 @@ fn register_function(
 ) {
     let map = SymbolInfoMap {
         zones: vec![VisibilityZone {
-            start: line_number as u32,
+            start: line_number,
             end: 0,
         }],
         // line_number: line_number as u32,
@@ -452,7 +473,7 @@ fn register_const(
 ) {
     let map = SymbolInfoMap {
         zones: vec![VisibilityZone {
-            start: line_number as u32,
+            start: line_number,
             end: 0,
         }],
         // line_number: line_number as u32,
@@ -570,13 +591,16 @@ pub fn process_const_declaration(
     let Some(value) = tokens.next() else { return };
     let value = value.trim();
     let value_lower = value.to_ascii_lowercase();
-    let Some(_type) = get_type(value_lower.as_str())
-        .or_else(|| {
-            table.symbols.get(value_lower.as_str()).and_then(|symbols| {
-                symbols.iter().find(|symbol| symbol.stack_id == stack_id).map(|symbol| symbol._type)
-            })
+    let Some(_type) = get_type(value_lower.as_str()).or_else(|| {
+        table.symbols.get(value_lower.as_str()).and_then(|symbols| {
+            symbols
+                .iter()
+                .find(|symbol| symbol.stack_id == stack_id)
+                .map(|symbol| symbol._type)
         })
-        else { return };
+    }) else {
+        return;
+    };
 
     log::debug!(
         "Found const declaration {} in line {}",
@@ -604,7 +628,9 @@ pub fn process_var_declaration(
 ) {
     let mut tokens = line.split('=');
 
-    let Some(mut name) = tokens.next() else { return };
+    let Some(mut name) = tokens.next() else {
+        return;
+    };
 
     if let Some(pos) = name.find('[') {
         name = &name[..pos];

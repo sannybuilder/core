@@ -203,7 +203,17 @@ pub struct FunctionSignature {
     pub name: Token,
     pub parameters: Vec<FunctionParameter>,
     pub return_types: Vec<FunctionReturnType>,
+    pub cc: FunctionCC,
+    pub address: Option<Token>,
     pub token: Token,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum FunctionCC {
+    Local, 
+    Cdecl,
+    Stdcall,
+    Thiscall,
 }
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunctionParameter {

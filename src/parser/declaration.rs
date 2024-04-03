@@ -1,6 +1,6 @@
 use crate::parser::interface::*;
 use nom::bytes::complete::{tag, tag_no_case};
-use nom::character::complete::space1;
+use nom::character::complete::{one_of, space0, space1};
 use nom::combinator::{map, opt};
 use nom::multi::{many1, separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, preceded, separated_pair, tuple};
@@ -21,13 +21,19 @@ pub fn function_signature(s: Span) -> R<FunctionSignature> {
         consumed(helpers::line(tuple((
             helpers::ws(terminated(tag_no_case("function"), space1)),
             helpers::ws(literal::identifier),
+            helpers::ws(opt(function_cc)),
             function_arguments_and_return_types,
         )))),
-        |(span, (_, name, (parameters, return_types)))| FunctionSignature {
-            name,
-            parameters,
-            return_types,
-            token: Token::from(span, SyntaxKind::FunctionSignature),
+        |(span, (_, name, cc, (parameters, return_types)))| {
+            let (cc, address) = cc.unwrap_or((FunctionCC::Local, None));
+            FunctionSignature {
+                name,
+                parameters,
+                return_types,
+                cc,
+                address,
+                token: Token::from(span, SyntaxKind::FunctionSignature),
+            }
         },
     )(s)
 }
@@ -56,7 +62,8 @@ fn function_arguments(s: Span) -> R<Vec<FunctionParameter>> {
             separated_list0(
                 helpers::ws(tag(",")),
                 consumed(pair(
-                    opt(terminated( // param names are optional in define function
+                    opt(terminated(
+                        // param names are optional in define function
                         helpers::ws(literal::identifier),
                         helpers::ws(tag(":")),
                     )),
@@ -79,11 +86,12 @@ fn function_arguments(s: Span) -> R<Vec<FunctionParameter>> {
 
 fn function_return_types(s: Span) -> R<Vec<FunctionReturnType>> {
     map(
-        preceded(
+        tuple((
             helpers::ws(tag(":")),
+            opt(tag_no_case("optional")),
             separated_list1(helpers::ws(tag(",")), helpers::ws(literal::identifier)),
-        ),
-        |types| {
+        )),
+        |(_, _, types)| {
             types
                 .into_iter()
                 .map(|_type| FunctionReturnType {
@@ -92,6 +100,24 @@ fn function_return_types(s: Span) -> R<Vec<FunctionReturnType>> {
                 })
                 .collect()
         },
+    )(s)
+}
+
+fn function_cc(s: Span) -> R<(FunctionCC, /*optional address*/ Option<Token>)> {
+    delimited(
+        tag("<"),
+        helpers::ws(tuple((
+            alt((
+                map(tag_no_case("thiscall"), |_| FunctionCC::Thiscall),
+                map(tag_no_case("cdecl"), |_| FunctionCC::Cdecl),
+                map(tag_no_case("stdcall"), |_| FunctionCC::Stdcall),
+            )),
+            opt(preceded(
+                helpers::ws(tag(",")),
+                helpers::ws(literal::number),
+            )),
+        ))),
+        tag(">"),
     )(s)
 }
 
@@ -202,6 +228,8 @@ end"#,
                 },
                 parameters: vec![],
                 return_types: vec![],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 14,
@@ -233,6 +261,8 @@ end"#,
                         syntax_kind: SyntaxKind::Identifier
                     }
                 }],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 20,
@@ -253,6 +283,8 @@ end"#,
                 },
                 parameters: vec![],
                 return_types: vec![],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 14,
@@ -284,6 +316,8 @@ end"#,
                         syntax_kind: SyntaxKind::Identifier
                     }
                 }],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 19,
@@ -331,6 +365,8 @@ end"#,
                         syntax_kind: SyntaxKind::Identifier
                     }
                 }],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 25,
@@ -398,6 +434,8 @@ end"#,
                         syntax_kind: SyntaxKind::Identifier
                     }
                 }],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 36,
@@ -493,9 +531,59 @@ end"#,
                         }
                     }
                 ],
+                cc: FunctionCC::Local,
+                address: None,
                 token: Token {
                     start: 1,
                     len: 46,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo<stdcall>()"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![],
+                cc: FunctionCC::Stdcall,
+                address: None,
+                token: Token {
+                    start: 1,
+                    len: 23,
+                    syntax_kind: SyntaxKind::FunctionSignature
+                }
+            }
+        );
+
+        let (_, node) = function_signature(Span::from(r#"function foo<cdecl, 0x135>()"#)).unwrap();
+
+        assert_eq!(
+            node,
+            FunctionSignature {
+                name: Token {
+                    start: 10,
+                    len: 3,
+                    syntax_kind: SyntaxKind::Identifier
+                },
+                parameters: vec![],
+                return_types: vec![],
+                cc: FunctionCC::Cdecl,
+                address: Some(Token {
+                    start: 21,
+                    len: 5,
+                    syntax_kind: SyntaxKind::IntegerLiteral
+                }),
+                token: Token {
+                    start: 1,
+                    len: 28,
                     syntax_kind: SyntaxKind::FunctionSignature
                 }
             }

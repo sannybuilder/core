@@ -2,10 +2,11 @@
 
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::path::Path;
 
 use super::config::Config;
 
-#[derive(Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Dict<T, U> {
     pub map: HashMap<T, U>,
     pub config: Config,
@@ -33,7 +34,7 @@ where
         }
     }
 
-    pub fn load_file<'a>(&mut self, file_name: &'a str) -> Option<()> {
+    pub fn load_file<P: AsRef<Path>>(&mut self, file_name: P) -> Option<()> {
         let content = std::fs::read_to_string(file_name).ok()?;
         self.parse_file(content)
     }

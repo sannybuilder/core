@@ -14,7 +14,9 @@ use nom_locate::LocatedSpan;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use crate::namespaces::{Command, CommandParamType, OpId, Operator};
+use crate::namespaces::{
+    Command, CommandParam, CommandParamSource, CommandParamType, OpId, Operator,
+};
 
 type Span<'a> = LocatedSpan<&'a str>;
 type R<'a, T> = IResult<Span<'a>, T>;
@@ -270,7 +272,13 @@ impl OpcodeTable {
         return true;
     }
 
-    fn get_word_for_param(&self, word_index: usize, param_name: &str, c: &Command) -> CString {
+    fn get_word_for_param(
+        &self,
+        word_index: usize,
+        param_name: &str,
+        c: &Command,
+        param: Option<&CommandParam>,
+    ) -> CString {
         let mut word = String::new();
 
         if word_index == 0 {
@@ -288,6 +296,22 @@ impl OpcodeTable {
                 }
                 _ => {
                     word.push_str(c.name.to_lowercase().as_str());
+
+                    if !param_name.is_empty() && !param_name.eq_ignore_ascii_case("self") {
+                        match param.map(|p| &p.source) {
+                            Some(
+                                CommandParamSource::AnyVar
+                                | CommandParamSource::AnyVarGlobal
+                                | CommandParamSource::AnyVarLocal,
+                            ) => {
+                                word.push_str(format!(" {{var_{}}}", param_name).as_str());
+                            }
+                            _ => {
+                                word.push_str(format!(" {{{}}}", param_name).as_str());
+                            }
+                        }
+                    }
+
                     word.push(' ');
                 }
             };
@@ -330,15 +354,17 @@ impl OpcodeTable {
                 }
             }
         } else if !param_name.is_empty() {
-            if word_index >= c.input.len() && c.output.len() > 0 {
-                word.push_str(" store_to");
-                if !param_name.eq("handle") {
-                    word.push(' ');
-                    word.push_str(param_name);
+            match param.map(|p| &p.source) {
+                Some(
+                    CommandParamSource::AnyVar
+                    | CommandParamSource::AnyVarGlobal
+                    | CommandParamSource::AnyVarLocal,
+                ) => {
+                    word.push_str(format!(" {{var_{}}}", param_name).as_str());
                 }
-            } else {
-                word.push(' ');
-                word.push_str(param_name);
+                _ => {
+                    word.push_str(format!(" {{{}}}", param_name).as_str());
+                }
             }
         }
         word.push(' ');
@@ -390,11 +416,14 @@ impl OpcodeTable {
                         },
                     },
                 );
-                words.insert(index, self.get_word_for_param(index, param.name.trim(), c));
+                words.insert(
+                    index,
+                    self.get_word_for_param(index, param.name.trim(), c, Some(param)),
+                );
             }
 
             if words.is_empty() {
-                words.insert(0, self.get_word_for_param(0, "", c));
+                words.insert(0, self.get_word_for_param(0, "", c, None));
             }
 
             let opcode = Opcode {

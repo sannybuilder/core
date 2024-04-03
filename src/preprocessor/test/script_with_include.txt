@@ -1,0 +1,6 @@
+{$CLEO}
+
+{$INCLUDE_ONCE addon.txt}
+{$INCLUDE ..\test\addon.txt}
+
+nop

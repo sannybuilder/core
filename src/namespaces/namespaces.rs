@@ -271,7 +271,7 @@ impl Namespaces {
     fn parse_method(
         &mut self,
         line: &str,
-        class_name: &String,
+        class_name: &str,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
         use crate::namespaces::classes_parser::method;
@@ -321,7 +321,7 @@ impl Namespaces {
     fn parse_prop(
         &mut self,
         line: &str,
-        class_name: &String,
+        class_name: &str,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
         use crate::namespaces::classes_parser::property;
@@ -408,7 +408,7 @@ impl Namespaces {
     fn parse_params(
         &mut self,
         params: &Vec<crate::namespaces::classes_parser::Param>,
-        full_name: &String,
+        full_name: &str,
     ) -> Vec<OpcodeParam> {
         use crate::namespaces::classes_parser::ParamType;
 

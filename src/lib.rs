@@ -1,5 +1,5 @@
 #![feature(never_type)]
-#![feature(hash_drain_filter)]
+#![feature(hash_extract_if)]
 
 use ctor::ctor;
 use simplelog::*;
@@ -16,6 +16,7 @@ pub mod update_service;
 pub mod utils;
 pub mod v4;
 pub mod source_map;
+pub mod preprocessor;
 
 #[ctor]
 fn main() {

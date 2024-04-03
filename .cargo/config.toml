@@ -5,4 +5,4 @@ target = "i686-pc-windows-msvc"
 b = "build --out-dir=..\\..\\exe\\lib -Z unstable-options"
 
 [target.i686-pc-windows-msvc]
-rustflags = ["-Ctarget-feature=+crt-static", "-Zunstable-options"]
+rustflags = ["-Ctarget-feature=+crt-static", "-Zunstable-options", "-Adead_code", "-Aunused"]
