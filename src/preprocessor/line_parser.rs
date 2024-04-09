@@ -93,7 +93,8 @@ pub struct DataParser {
     handlers: HashMap<u8, Handler>,
     line: Vec<u8>,
     current_char: usize,
-    in_comment: bool,
+    in_comment_curly: bool,
+    in_comment_cpp: bool,
 }
 
 #[derive(Debug)]
@@ -144,7 +145,8 @@ impl DataParser {
             handlers,
             line: Vec::new(),
             current_char: 0,
-            in_comment: false,
+            in_comment_cpp: false,
+            in_comment_curly: false,
             // current_char: std::ptr::null(),
         }
     }
@@ -192,13 +194,36 @@ impl DataParser {
 
     fn read_char(&mut self) -> u8 {
         match self.at(self.current_char) {
+            _ if self.in_comment_curly => {
+                if self.skip_until(b"}") {
+                    self.next(); // }
+                    self.in_comment_curly = false;
+                    return self.this_char(); // return char after comment
+                } else {
+                    0
+                }
+            }
+            _ if self.in_comment_cpp => {
+                loop {
+                    match self.at(self.current_char) {
+                        0 | 10 | 13 => return 0,
+                        b'*' if self.at(self.current_char + 1) == b'/' => {
+                            self.next_n(2); // */
+                            self.in_comment_cpp = false;
+                            return self.this_char(); // return char after comment
+                        }
+                        _ => self.next(),
+                    }
+                }
+            }
             b'{' if self.at(self.current_char + 1) != b'$' => {
                 self.next(); // {
                 if self.skip_until(b"}") {
                     self.next(); // }
-                    return self.this_char();
+                    self.in_comment_curly = false;
+                    return self.this_char(); // return char after comment
                 } else {
-                    self.in_comment = true;
+                    self.in_comment_curly = true;
                     0
                 }
             }
@@ -207,12 +232,13 @@ impl DataParser {
                 loop {
                     match self.at(self.current_char) {
                         0 | 10 | 13 => {
-                            self.in_comment = true;
+                            self.in_comment_cpp = true;
                             return 0;
                         }
                         b'*' if self.at(self.current_char + 1) == b'/' => {
                             self.next_n(2); // */
-                            return self.this_char();
+                            self.in_comment_cpp = false;
+                            return self.this_char(); // return char after comment
                         }
                         _ => {
                             self.next();
@@ -247,23 +273,6 @@ impl DataParser {
         self.current_char = current_char;
         peek
     }
-
-    // fn get_until(&mut self, chars: &[u8]) -> String {
-    //     let mut s = String::new();
-    //     loop {
-    //         match self.this_char() {
-    //             0 | 10 | 13 => break,
-    //             _ => {
-    //                 if chars.contains(&self.this_char()) {
-    //                     break;
-    //                 }
-    //                 s.push(self.this_char() as char);
-    //                 self.next();
-    //             }
-    //         }
-    //     }
-    //     s
-    // }
 
     fn slice(&mut self, start: usize) -> String {
         let mut buf = vec![];
@@ -326,7 +335,7 @@ impl DataParser {
     fn skip_until(&mut self, chars: &[u8]) -> bool {
         let stop_chars = [0, 10, 13];
         loop {
-            let c = self.this_char();
+            let c = self.at(self.current_char);
             if chars.contains(&c) {
                 return true;
             }
@@ -426,13 +435,8 @@ fn open_curly_proc(p: &mut DataParser) -> Token {
             p.unknown()
         }
     } else {
-        if p.skip_until(b"}") {
-            p.next(); // }
-            p.get_token()
-        } else {
-            p.in_comment = true;
-            p.eol()
-        }
+        p.in_comment_curly = true;
+        p.get_token()
     }
 }
 
@@ -562,23 +566,9 @@ fn div_proc(p: &mut DataParser) -> Token {
             p.eol()
         }
         b'*' => {
-            // block comment
+            // block comment /*
             p.next(); // *
-            loop {
-                match p.this_char() {
-                    0 | 10 | 13 => {
-                        p.in_comment = true;
-                        return p.eol();
-                    }
-                    b'*' if p.peek() == b'/' => {
-                        p.next_n(2); // */
-                        break;
-                    }
-                    _ => {
-                        p.next();
-                    }
-                }
-            }
+            p.in_comment_cpp = true;
             p.get_token()
         }
         _ => p.punctuator(TokenType::Div),
@@ -1209,16 +1199,20 @@ mod tests {
         assert_eq!(token.token_type, TokenType::Int);
         assert_eq!(token.val, TokenVal::Ident("123".to_string()));
 
+        parser.in_comment_curly = false;
+        parser.in_comment_cpp = false;
         parser.line("{");
 
         let token = parser.get_token();
         assert_eq!(token.token_type, TokenType::Eol);
-        assert!(parser.in_comment);
+        assert!(parser.in_comment_curly);
 
+        parser.in_comment_curly = false;
+        parser.in_comment_cpp = false;
         parser.line("/*");
 
         let token = parser.get_token();
         assert_eq!(token.token_type, TokenType::Eol);
-        assert!(parser.in_comment);
+        assert!(parser.in_comment_cpp);
     }
 }

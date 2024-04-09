@@ -1,6 +1,3 @@
-#![feature(never_type)]
-#![feature(hash_extract_if)]
-
 use ctor::ctor;
 use simplelog::*;
 

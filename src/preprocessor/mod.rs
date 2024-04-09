@@ -96,7 +96,12 @@ impl Preprocessor {
         self.source_type = SourceType::File(file_path.clone());
         self.absolute_line_index = 0;
         self.load_implicit_includes()?;
-        self.load_file_source(&file_path)?;
+        match self.load_file_source(&file_path) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("{e}");
+            }
+        }
         self.scopes.exit_scope(self.absolute_line_index);
         Ok(())
     }
@@ -107,8 +112,9 @@ impl Preprocessor {
         self.load_implicit_includes()?;
 
         self.current_file = -1;
+        let mut in_hex_block = false;
         for (line_index, line) in source.lines().enumerate() {
-            match self.process_line(line, line_index) {
+            match self.process_line(line, line_index, &mut in_hex_block) {
                 Ok(_) => {}
                 Err(e) => {
                     bail!(e);
@@ -169,9 +175,10 @@ impl Preprocessor {
         //         .build(file),
         // );
         // let mut lines = reader.lines().enumerate();
+        let mut in_hex_block = false;
         while let Some((line_index, line)) = lines.next() {
             match line {
-                Ok(line) => match self.process_line(line.as_str(), line_index) {
+                Ok(line) => match self.process_line(line.as_str(), line_index, &mut in_hex_block) {
                     Ok(_) => {}
                     Err(e) => {
                         bail!(e);
@@ -187,20 +194,23 @@ impl Preprocessor {
         Ok(())
     }
 
-    pub fn process_line(&mut self, line: &str, line_index: usize) -> Result<()> {
+    pub fn process_line(
+        &mut self,
+        line: &str,
+        line_index: usize,
+        in_hex_block: &mut bool,
+    ) -> Result<()> {
         self.parser.line(line);
         self.absolute_line_index += 1;
         let token = self.parser.get_token();
 
         match token.token_type {
-            TokenType::Directive => {
+            TokenType::Directive if !*in_hex_block => {
                 match token.val {
                     TokenVal::Ident(s) => {
                         let token_id = self.reserved_words.map.get(&s.to_ascii_lowercase());
                         match token_id {
-                            Some(&TOKEN_INCLUDE) | Some(&TOKEN_INCLUDE_ONCE)
-                                if !self.scopes.get_current_scope().is_in_hex_block =>
-                            {
+                            Some(&TOKEN_INCLUDE) | Some(&TOKEN_INCLUDE_ONCE) => {
                                 self.parser.skip_whitespace();
                                 let token = self.parser.get_until1(b"}", TokenType::Ident);
                                 if self.parser.get_token().token_type != TokenType::CloseCurly {
@@ -250,7 +260,7 @@ impl Preprocessor {
                                                 }
 
                                                 if let Err(e) = self.load_file_source(&path) {
-                                                    bail!("Error loading include file: {}", e);
+                                                    bail!(e);
                                                 }
 
                                                 self.open_files.remove(&path);
@@ -275,7 +285,7 @@ impl Preprocessor {
                     _ => {}
                 }
             }
-            TokenType::Unknown => {
+            TokenType::Unknown if !*in_hex_block => {
                 let loc = self.parser.current_loc();
                 bail!("Unknown token at line {}:{}", loc.0, loc.1);
             }
@@ -292,7 +302,7 @@ impl Preprocessor {
                                 }
                                 TOKEN_END => {
                                     let scope = self.scopes.get_current_scope();
-                                    scope.is_in_hex_block = false; // hex blocks can't be nested, so any end will close it
+                                    *in_hex_block = false; // hex blocks can't be nested, so any end will close it
                                     if !scope.is_root() {
                                         if scope.is_in_block() {
                                             // we are in a loop/if block
@@ -312,7 +322,7 @@ impl Preprocessor {
                                     }
                                 }
                                 TOKEN_HEX => {
-                                    self.scopes.get_current_scope().is_in_hex_block = true;
+                                    *in_hex_block = true;
                                 }
                                 _ => {
                                     // ignore
@@ -535,5 +545,28 @@ mod tests {
             .unwrap();
         assert_eq!(preprocessor.files.len(), 2);
         assert_eq!(preprocessor.get_number_of_functions_this_scope(50), 1);
+    }
+
+    #[test]
+    fn test_parse_comments() {
+        let mut preprocessor = PreProcessorBuilder::new()
+            .implicit_includes(vec!["src/preprocessor/test/const.txt".into()])
+            .build();
+        // preprocessor
+        //     .parse_in_memory("function foo\nend ")
+        //     .unwrap();
+        // assert_eq!(preprocessor.source_type, SourceType::Memory);
+        // assert_eq!(preprocessor.scopes.functions.len(), 0);
+
+        let res = preprocessor.parse_in_memory(
+            r#"
+            /*
+            ;
+            */
+        "#,
+        );
+
+        assert_eq!(preprocessor.source_type, SourceType::Memory);
+        assert!(res.is_ok());
     }
 }

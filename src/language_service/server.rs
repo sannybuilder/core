@@ -98,19 +98,15 @@ impl LanguageServer {
         let mut watcher = FILE_WATCHER.lock().unwrap();
 
         // disconnect editor from all files and stop watching orphan references
-        let _drained = WATCHED_FILES
-            .lock()
-            .unwrap()
-            .extract_if(|k, v| {
-                v.remove(&handle);
-                if v.is_empty() {
-                    LanguageServer::invalidate_file_cache(k);
-                    watcher.unwatch(k);
-                    return true;
-                }
+        WATCHED_FILES.lock().unwrap().retain(|k, v| {
+            v.remove(&handle);
+            if v.is_empty() {
+                LanguageServer::invalidate_file_cache(k);
+                watcher.unwatch(k);
                 return false;
-            })
-            .collect::<Vec<_>>();
+            }
+            return true;
+        });
     }
 
     pub fn find(
@@ -195,19 +191,17 @@ impl LanguageServer {
         let mut watcher = FILE_WATCHER.lock().unwrap();
 
         // remove handle from dereferenced files
-        let _drained = watched_files
-            .extract_if(|k, v| {
-                if !tree.contains(k) && v.contains(&handle) {
-                    v.remove(&handle);
-                    if v.is_empty() {
-                        LanguageServer::invalidate_file_cache(k);
-                        watcher.unwatch(k);
-                        return true;
-                    }
+        watched_files.retain(|k, v| {
+            if !tree.contains(k) && v.contains(&handle) {
+                v.remove(&handle);
+                if v.is_empty() {
+                    LanguageServer::invalidate_file_cache(k);
+                    watcher.unwatch(k);
+                    return false;
                 }
-                return false;
-            })
-            .collect::<Vec<_>>();
+            }
+            return true;
+        });
 
         // add new references
         for file_name in tree {

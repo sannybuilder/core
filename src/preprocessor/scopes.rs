@@ -11,7 +11,6 @@ pub struct Scope {
     is_root: bool,
     start_line: usize,
     open_blocks: usize,
-    pub is_in_hex_block: bool,
 }
 
 #[derive(Debug)]
@@ -31,7 +30,6 @@ impl Scopes {
         let mut scope = Scope {
             start_line: line_index,
             open_blocks: 0,
-            is_in_hex_block: false,
             is_root: self.stack.is_empty(),
         };
         if !self.stack.is_empty() {
