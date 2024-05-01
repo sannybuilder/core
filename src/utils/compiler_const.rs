@@ -10,6 +10,7 @@ pub const TOKEN_HANDLE: i32 = 5;
 pub const TOKEN_BOOL: i32 = 6;
 
 pub const TOKEN_DEFINE: i32 = 43;
+pub const TOKEN_EXPORT: i32 = 44;
 
 // blocks
 pub const TOKEN_HEX: i32 = 45;

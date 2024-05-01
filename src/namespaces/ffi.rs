@@ -343,6 +343,30 @@ pub unsafe extern "C" fn classes_get_output_count_by_id(
     }}
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn classes_is_input_of_type(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    index: usize,
+    _type: u8,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.is_input_of_type(opcode, index, _type.into())?.then_some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_is_output_of_type(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    index: usize,
+    _type: u8,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.is_output_of_type(opcode, index, _type.into())?.then_some(())
+    }}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

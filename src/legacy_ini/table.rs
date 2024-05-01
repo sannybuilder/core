@@ -24,13 +24,14 @@ type R<'a, T> = IResult<Span<'a>, T>;
 #[derive(Debug, Default)]
 pub struct Opcode {
     num_params: i8,
-    params: HashMap<usize, Param>,
+    params: HashMap</*param index in decompiled file */ usize, Param>,
     words: HashMap<usize, CString>,
+    is_scr: bool,
 }
 
 #[derive(Debug)]
 pub struct Param {
-    real_index: u8,
+    real_index: u8, // param index as the game expects
     param_type: ParamType,
 }
 
@@ -168,10 +169,14 @@ pub fn opcode_line(s: Span) -> R<Line> {
                 }
             }
 
+            let is_scr = params.iter().fold(true, |acc, (index, p)| {
+                acc && p.real_index as usize == *index
+            });
             Line::Opcode(
                 id,
                 Opcode {
                     num_params,
+                    is_scr,
                     params,
                     words,
                 },
@@ -382,21 +387,22 @@ impl OpcodeTable {
             let mut is_variadic = false;
             let mut words: HashMap<usize, CString> = HashMap::new();
             let iter = c.input.iter().chain(c.output.iter());
-            for (index, param) in iter.enumerate() {
+            for (real_index, param) in iter.enumerate() {
                 if param.r#type == CommandParamType::Arguments {
                     is_variadic = true;
                 }
 
                 // when an operator is used, put output params (if any) before input params
                 // in decompiled code they would look like: [out] = [arg1] [op] [arg2]
-                let real_index = if c.operator.is_some() {
-                    if index < c.output.len() {
-                        c.input.len() + index
+                let index = if c.operator.is_some() {
+                    // only math commands are allowed to reorder arguments
+                    if real_index < c.input.len() {
+                        c.output.len() + real_index
                     } else {
-                        index - c.output.len()
+                        real_index - c.input.len()
                     }
                 } else {
-                    index
+                    real_index // never reorder params in regular commands
                 };
                 params.insert(
                     index,
@@ -430,6 +436,7 @@ impl OpcodeTable {
                 num_params: if is_variadic { -1 } else { c.num_params as i8 },
                 params,
                 words,
+                is_scr: true, // all params are in original order (except math)
             };
             self.add_opcode(c.id, opcode);
         }
@@ -506,6 +513,10 @@ impl OpcodeTable {
             .and_then(|opcode| opcode.params.get(&index))
             .map(|x| x.param_type)
             .unwrap_or(ParamType::Any)
+    }
+
+    pub fn get_param_is_scr(&self, id: u16) -> bool {
+        self.get_opcode(id).map(|opcode| opcode.is_scr).unwrap_or(true)
     }
 
     pub fn does_word_exist(&self, id: u16, index: usize) -> bool {
@@ -615,6 +626,98 @@ mod tests {
         assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
         assert_eq!(opcode_table.get_param_real_index(id, 3), 2);
         assert_eq!(opcode_table.get_param_real_index(id, 4), 3);
+    }
+
+    #[test]
+    fn test_real_index2() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+
+        let mut commands = HashMap::new();
+        commands.insert(
+            0x0001,
+            Command {
+                id: 0x0001,
+                name: "INT_ADD".to_string(),
+                num_params: 3,
+                short_desc: "".to_string(),
+                class: None,
+                member: None,
+                attrs: crate::namespaces::Attr::default(),
+                input: vec![
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                ],
+                output: vec![CommandParam {
+                    name: "".to_string(),
+                    r#type: CommandParamType::Any,
+                    source: CommandParamSource::AnyVar,
+                }],
+                platforms: vec![],
+                versions: vec![],
+                // operator: None,
+                operator: Some(Operator::Assignment),
+            },
+        );
+        commands.insert(
+            0x0002,
+            Command {
+                id: 0x0002,
+                name: "INT_CMP".to_string(),
+                num_params: 2,
+                short_desc: "".to_string(),
+                class: None,
+                member: None,
+                attrs: crate::namespaces::Attr::default(),
+                input: vec![
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::AnyModel,
+                        source: CommandParamSource::Any,
+                    },
+                ],
+                output: vec![],
+                platforms: vec![],
+                versions: vec![],
+                operator: Some(Operator::IsEqualTo),
+            },
+        );
+
+        opcode_table.load_from_json(&commands);
+
+        let id = 0x0001;
+        assert_eq!(opcode_table.get_params_count(id), 3);
+
+        assert_eq!(opcode_table.get_param_real_index(id, 0), 2);
+        assert_eq!(opcode_table.get_param_type(id, 0), ParamType::Any);
+
+        assert_eq!(opcode_table.get_param_type(id, 1), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_real_index(id, 1), 0);
+
+        assert_eq!(opcode_table.get_param_type(id, 2), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
+
+        let id = 0x0002;
+        assert_eq!(opcode_table.get_params_count(id), 2);
+        assert_eq!(opcode_table.get_param_real_index(id, 0), 0);
+        assert_eq!(opcode_table.get_param_real_index(id, 1), 1);
+
+        assert_eq!(opcode_table.get_param_type(id, 0), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_type(id, 1), ParamType::AnyModel);
+
+        
     }
 
     #[test]

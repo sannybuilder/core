@@ -179,6 +179,60 @@ pub fn scan_text<'a>(
         let line_number = line_number.unwrap_or(_index);
         let stack_id = scope_stack.len() as u32;
 
+        let mut process_function_signature = |line: &str, signature: &FunctionSignature| {
+            let scope_start_line = scope_stack.last().map(|(_, line)| *line).unwrap_or(0); // hoist the scope start line
+
+            register_function(
+                table,
+                scope_start_line as usize,
+                stack_id,
+                line,
+                signature,
+                next_annotation.take(),
+            );
+            // only local functions create new scope. foreign functions do not
+            if signature.cc == crate::parser::FunctionCC::Local {
+                // push new scope
+                scope_stack.push((0, line_number as u32));
+
+                // end visibility zone for the local variables of the parent scope
+                // because parent local variables can not be seen in functions
+                // todo: make sure global vars is an exception
+                for (_, symbols) in table.symbols.iter_mut() {
+                    for symbol in symbols {
+                        if symbol.stack_id == stack_id && symbol._type == SymbolType::Var {
+                            let Some(last_zone) = symbol.zones.last_mut() else {
+                                continue;
+                            };
+
+                            if last_zone.end != 0 {
+                                // should not happen
+                                log::error!(
+                                    "Symbol {} does not have an open visibility zone",
+                                    symbol.name_no_format
+                                );
+                                continue;
+                            }
+
+                            last_zone.end = line_number;
+                        }
+                    }
+                }
+                for param in &signature.parameters {
+                    if let Some(ref name) = param.name {
+                        register_var(
+                            table,
+                            line_number,
+                            stack_id + 1, // register function parameters in the function's stack
+                            token_str(line, name),
+                            Some(token_str(line, &param._type).to_string()),
+                            None,
+                        );
+                    }
+                }
+            }
+        };
+
         match token_id {
             Some(token) => match *token {
                 TOKEN_INCLUDE | TOKEN_INCLUDE_ONCE => {
@@ -275,30 +329,19 @@ pub fn scan_text<'a>(
                         process_var_declaration(&name, table, line_number, stack_id, &first)
                     }
                 }
-                // TOKEN_DEFINE => {
-                //     // define function
-                //     // todo: other defines?
+                TOKEN_EXPORT => {
+                    // export function <signature>
+                    use crate::parser::{function_signature, Span};
 
-                //     use crate::parser::{function_signature, Span};
-
-                //     // parse function signature and add its parameters to the symbol table as variables
-                //     let Ok((_, ref signature)) = function_signature(Span::from(rest.as_str()))
-                //     else {
-                //         continue;
-                //     };
-
-                //     register_function(
-                //         table,
-                //         line_number,
-                //         stack_id,
-                //         rest.as_str(),
-                //         signature,
-                //         next_annotation.take(),
-                //     );
-                // }
+                    // parse function signature and add its parameters to the symbol table as variables
+                    let Ok((_, ref signature)) = function_signature(Span::from(rest.as_str()))
+                    else {
+                        continue;
+                    };
+                    process_function_signature(rest.as_str(), signature);
+                }
                 TOKEN_FUNCTION => {
-                    let scope_start_line = scope_stack.last().map(|(_, line)| *line).unwrap_or(0); // hoist the scope start line
-
+                    // function <signature>
                     use crate::parser::{function_signature, Span};
 
                     // parse function signature and add its parameters to the symbol table as variables
@@ -308,56 +351,7 @@ pub fn scan_text<'a>(
                         continue;
                     };
 
-                    register_function(
-                        table,
-                        scope_start_line as usize,
-                        stack_id,
-                        line,
-                        signature,
-                        next_annotation.take(),
-                    );
-
-                    // only local functions create new scope. foreign functions do not
-                    if signature.cc == crate::parser::FunctionCC::Local {
-                        // push new scope
-                        scope_stack.push((0, line_number as u32));
-
-                        // end visibility zone for the local variables of the parent scope
-                        // because parent local variables can not be seen in functions
-                        // todo: make sure global vars is an exception
-                        for (_, symbols) in table.symbols.iter_mut() {
-                            for symbol in symbols {
-                                if symbol.stack_id == stack_id && symbol._type == SymbolType::Var {
-                                    let Some(last_zone) = symbol.zones.last_mut() else {
-                                        continue;
-                                    };
-
-                                    if last_zone.end != 0 {
-                                        // should not happen
-                                        log::error!(
-                                            "Symbol {} does not have an open visibility zone",
-                                            symbol.name_no_format
-                                        );
-                                        continue;
-                                    }
-
-                                    last_zone.end = line_number;
-                                }
-                            }
-                        }
-                        for param in &signature.parameters {
-                            if let Some(ref name) = param.name {
-                                register_var(
-                                    table,
-                                    line_number,
-                                    stack_id + 1, // register function parameters in the function's stack
-                                    token_str(&line, name),
-                                    Some(token_str(&line, &param._type).to_string()),
-                                    None,
-                                );
-                            }
-                        }
-                    }
+                    process_function_signature(line, signature);
                 }
 
                 TOKEN_IF | TOKEN_FOR | TOKEN_WHILE | TOKEN_SWITCH => {

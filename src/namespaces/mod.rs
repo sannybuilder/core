@@ -10,4 +10,5 @@ pub use library::CommandParamType;
 pub use library::CommandParamSource;
 pub use library::Operator;
 pub use library::Library;
+pub use library::Attr;
 pub use namespaces::OpId;

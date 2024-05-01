@@ -25,7 +25,7 @@ pub unsafe extern "C" fn legacy_ini_load_file(table: *mut OpcodeTable, path: PCh
                     "File {path} loaded. Max opcode: {:04X}, Count: {}",
                     (*table).get_max_opcode(),
                     (*table).len()
-                )
+                );
             } else {
                 log::debug!("File {path} already loaded");
             }
@@ -141,4 +141,12 @@ pub unsafe extern "C" fn legacy_ini_is_variadic_opcode(
     opcode: u16,
 ) -> bool {
     (*table).is_variadic_opcode(opcode)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn legacy_ini_get_is_scr(
+    table: *mut OpcodeTable,
+    opcode: u16,
+) -> bool {
+    (*table).get_param_is_scr(opcode)
 }

@@ -7,7 +7,10 @@ use crate::dictionary::{
     list_num_by_str::ListNumByStr,
 };
 
-use super::library::{Command, Library};
+use super::{
+    library::{Command, Library},
+    CommandParamType,
+};
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -784,5 +787,27 @@ impl Namespaces {
 
     pub fn get_output_count<'a>(&self, id: OpId) -> Option<usize> {
         self.commands.get(&id).map(|c| c.output.len())
+    }
+
+    pub fn is_input_of_type(
+        &self,
+        id: OpId,
+        index: usize,
+        _type: CommandParamType,
+    ) -> Option<bool> {
+        self.commands
+            .get(&id)
+            .map(|c| c.input.get(index).map_or(false, |i| i.r#type == _type))
+    }
+
+    pub fn is_output_of_type(
+        &self,
+        id: OpId,
+        index: usize,
+        _type: CommandParamType,
+    ) -> Option<bool> {
+        self.commands
+            .get(&id)
+            .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
     }
 }

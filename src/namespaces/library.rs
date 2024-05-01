@@ -13,6 +13,23 @@ pub enum CommandParamType {
     Any,
 }
 
+impl From<u8> for CommandParamType {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => Self::Any,
+            1 => Self::Gxt,
+            2 => Self::Pointer,
+            3 => Self::AnyModel,
+            4 => Self::ScriptId,
+            5 => Self::String8,
+            6 => Self::IdeModel,
+            7 => Self::Byte128,
+            8 => Self::Arguments,
+            _ => Self::Any,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum CommandParamSource {
     Any,

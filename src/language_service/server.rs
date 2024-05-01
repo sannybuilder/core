@@ -10,7 +10,6 @@ use crate::{
     dictionary::{config, ffi::CaseFormat, DictNumByString},
     namespaces::namespaces::Namespaces,
 };
-use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     env,
