@@ -13,7 +13,7 @@ use crate::{
     preprocessor::scopes::Function,
     utils::{
         compiler_const::{
-            TOKEN_END, TOKEN_FOR, TOKEN_FUNCTION, TOKEN_HEX, TOKEN_IF, TOKEN_INCLUDE,
+            TOKEN_END, TOKEN_EXPORT, TOKEN_FOR, TOKEN_FUNCTION, TOKEN_HEX, TOKEN_IF, TOKEN_INCLUDE,
             TOKEN_INCLUDE_ONCE, TOKEN_SWITCH, TOKEN_WHILE,
         },
         path::{normalize_file_name, resolve_path},
@@ -295,6 +295,23 @@ impl Preprocessor {
                         if let Some(token_id) = self.reserved_words.map.get(&s.to_ascii_lowercase())
                         {
                             match *token_id {
+                                TOKEN_EXPORT => {
+                                    let loc = self.parser.current_loc();
+                                    let token = self.parser.get_token();
+                                    if let TokenType::Ident = token.token_type {
+                                        if let TokenVal::Ident(s) = token.val {
+                                            if let Some(token_id) =
+                                                self.reserved_words.map.get(&s.to_ascii_lowercase())
+                                            {
+                                                if let TOKEN_FUNCTION = *token_id {
+                                                    if let Err(e) = self.process_new_function(loc.0[loc.1..].trim()) {
+                                                        bail!(e)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 TOKEN_FUNCTION => {
                                     if let Err(e) = self.process_new_function(line) {
                                         bail!(e)

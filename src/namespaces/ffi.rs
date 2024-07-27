@@ -1,5 +1,5 @@
 use crate::common_ffi::*;
-use crate::namespaces::namespaces::*;
+use crate::namespaces::{namespaces::*, CommandParamType};
 
 #[no_mangle]
 pub extern "C" fn classes_new() -> *mut Namespaces {
@@ -364,6 +364,42 @@ pub unsafe extern "C" fn classes_is_output_of_type(
 ) -> bool {
     boolclosure! {{
         ns.as_mut()?.is_output_of_type(opcode, index, _type.into())?.then_some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_input_type(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    index: usize,
+    _type: *mut u8,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.get_input_type(opcode, index).map(|x| *_type = {
+            match x {
+                CommandParamType::Float => 2,
+                CommandParamType::String8 | CommandParamType::Gxt => 3,
+                _ => 1,
+            }
+        })
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_output_type(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    index: usize,
+    _type: *mut u8,
+) -> bool {
+    boolclosure! {{
+        ns.as_mut()?.get_output_type(opcode, index).map(|x| *_type = {
+            match x {
+                CommandParamType::Float => 2,
+                CommandParamType::String8 | CommandParamType::Gxt => 3,
+                _ => 1,
+            }
+        })
     }}
 }
 

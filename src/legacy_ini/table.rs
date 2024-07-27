@@ -46,6 +46,7 @@ pub enum ParamType {
     String8 = 6, // only lcs
     IdeModel = 7,
     Byte128 = 8, // only SA
+    Float = 9,
 }
 
 #[derive(Debug, PartialEq)]
@@ -418,6 +419,7 @@ impl OpcodeTable {
                             }
                             CommandParamType::IdeModel => ParamType::IdeModel,
                             CommandParamType::Byte128 => ParamType::Byte128,
+                            CommandParamType::Float => ParamType::Float,
                             _ => ParamType::Any,
                         },
                     },

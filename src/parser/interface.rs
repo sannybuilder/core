@@ -89,6 +89,8 @@ pub enum Variable {
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
     Adma(SingleVariable),
+    Push(Token),
+    Pop(Token),
 }
 
 impl Variable {
@@ -97,6 +99,8 @@ impl Variable {
             Variable::Indexed(v) => &v.var.get_var_name(),
             Variable::ArrayElement(v) => &v.array_var.get_var_name(),
             Variable::Local(v) | Variable::Global(v) | Variable::Adma(v) => &v.token,
+            Variable::Pop(v) => v,
+            Variable::Push(v) => v,
         }
     }
 
@@ -114,6 +118,7 @@ impl Variable {
             Variable::Local(_) => true,
             Variable::Indexed(v) if v.var.is_local() => true,
             Variable::ArrayElement(v) if v.array_var.is_local() => true,
+            Variable::Pop(_) | Variable::Push(_) => true,
             _ => false,
         }
     }

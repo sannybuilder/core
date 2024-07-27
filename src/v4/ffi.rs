@@ -9,6 +9,7 @@ pub unsafe extern "C" fn v4_try_transform(
     ns: *const Namespaces,
     legacy_ini: *const OpcodeTable,
     const_lookup: *const DictStrByStr,
+    compile_callback: extern "C" fn(u32, PChar),
     out: *mut PChar,
 ) -> bool {
     boolclosure! {{

@@ -289,6 +289,8 @@ fn delete_files(src_dir: impl AsRef<Path>, extension: &str) -> std::io::Result<(
 }
 
 pub fn download_update(channel: Channel, local_version: &str) -> bool {
+    log::info!("downloading update from channel {channel}");
+
     let Some(url) = get_download_link(channel, local_version) else {
         log::error!("failed to get download link");
         return false;
@@ -310,21 +312,24 @@ pub fn download_update(channel: Channel, local_version: &str) -> bool {
         log::error!("failed to get update dir");
         return false;
     };
+    log::info!("unpacking update to {}", temp.display());
+
     match zip_unpack(&mut std::io::Cursor::new(buf), &temp) {
         Ok(_) => {}
         Err(e) => {
-            log::error!("{e}");
+            log::error!("unpack failed: {e}");
             return false;
         }
     }
 
     // // copy all files from pending to cwd
+    log::info!("copying files to {}", cwd.display());
     match move_files(temp, cwd) {
         Ok(_) => {
             log::debug!("copied all files");
         }
         Err(e) => {
-            log::error!("{e}");
+            log::error!("copy failed: {e}");
             return false;
         }
     }

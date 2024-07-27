@@ -810,4 +810,25 @@ impl Namespaces {
             .get(&id)
             .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
     }
+
+    pub fn get_input_type(
+        &self,
+        id: OpId,
+        index: usize,
+    ) -> Option<&CommandParamType> {
+        self.commands
+            .get(&id)
+            .and_then(|c| c.input.get(index).map(|i| &i.r#type))
+    }
+
+
+    pub fn get_output_type(
+        &self,
+        id: OpId,
+        index: usize,
+    ) -> Option<&CommandParamType> {
+        self.commands
+            .get(&id)
+            .and_then(|c| c.output.get(index).map(|i| &i.r#type))
+    }
 }

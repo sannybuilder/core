@@ -1,4 +1,5 @@
 use nom::branch::alt;
+use nom::bytes::complete::tag;
 use nom::character::complete::char;
 use nom::character::complete::one_of;
 use nom::combinator::consumed;
@@ -71,7 +72,7 @@ fn array_index(s: Span) -> R<Node> {
 }
 
 fn single_variable(s: Span) -> R<Variable> {
-    alt((local_var, global_var, adma_var))(s)
+    alt((local_var, global_var, adma_var, pop_token, push_token))(s)
 }
 
 fn single_variable_or_const(s: Span) -> R<Variable> {
@@ -101,6 +102,18 @@ fn local_var(s: Span) -> R<Variable> {
             })
         },
     )(s)
+}
+
+fn pop_token(s: Span) -> R<Variable> {
+    map(consumed(tag("|>")), |(span, _)| {
+        Variable::Pop(Token::from(span, SyntaxKind::LocalVariable))
+    })(s)
+}
+
+fn push_token(s: Span) -> R<Variable> {
+    map(consumed(tag("|<")), |(span, _)| {
+        Variable::Push(Token::from(span, SyntaxKind::LocalVariable))
+    })(s)
 }
 
 fn global_var(s: Span) -> R<Variable> {
@@ -603,6 +616,36 @@ mod tests {
                         len: 4,
                         syntax_kind: SyntaxKind::IndexedVariable
                     }
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables16() {
+        let (_, ast) = parse("|>").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::Pop(Token {
+                    start: 1,
+                    len: 2,
+                    syntax_kind: SyntaxKind::LocalVariable
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables17() {
+        let (_, ast) = parse("|<").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::Push(Token {
+                    start: 1,
+                    len: 2,
+                    syntax_kind: SyntaxKind::LocalVariable
                 }))]
             }
         );

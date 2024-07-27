@@ -47,6 +47,8 @@ pub fn as_token(node: &Node) -> Option<&Token> {
             Variable::ArrayElement(v) => Some(&v.token),
             Variable::Indexed(v) => Some(&v.token),
             Variable::Adma(v) => Some(&v.token),
+            Variable::Pop(v) => Some(&v),
+            Variable::Push(v) => Some(&v),
         },
         _ => None,
     }

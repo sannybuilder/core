@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum CommandParamType {
     Gxt,
     Pointer,
@@ -10,6 +10,7 @@ pub enum CommandParamType {
     IdeModel,
     Byte128,
     Arguments,
+    Float,
     Any,
 }
 
@@ -25,6 +26,7 @@ impl From<u8> for CommandParamType {
             6 => Self::IdeModel,
             7 => Self::Byte128,
             8 => Self::Arguments,
+            9 => Self::Float,
             _ => Self::Any,
         }
     }
@@ -91,6 +93,7 @@ impl<'de> Deserialize<'de> for CommandParamType {
             Ok("string128") => Ok(Self::Byte128),
             Ok("string") => Ok(Self::String8),
             Ok("arguments") => Ok(Self::Arguments),
+            Ok("float") => Ok(Self::Float),
             _ => Ok(Self::Any),
         }
     }
