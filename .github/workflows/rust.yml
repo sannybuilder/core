@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-03-08
+          toolchain: nightly-2023-12-21
           target: i686-pc-windows-msvc
           override: true
       - name: Build
