@@ -1,0 +1,65 @@
+{$CLEO .cs}
+DynamicLibrary advapi32
+GetUserNameA pGetUserNameA
+
+if not advapi32 = load_dynamic_library "advapi32.dll"
+then
+    trace "advapi32.dll not found"
+    terminate_this_custom_script
+end
+
+if not pGetUserNameA = get_dynamic_library_procedure "GetUserNameA" advapi32
+then
+    trace "function GetUserNameA not found"
+    terminate_this_custom_script
+end
+
+function test
+end
+test()
+:test
+
+
+
+//define function foo
+
+int lpBuffer = get_label_pointer @name_buf
+int pcbBuffer = get_label_pointer @size_buf
+
+int res = pGetUserNameA(lpBuffer, pcbBuffer)
+if res == 0
+then
+    printLastError("GetUserNameA failed")
+    terminate_this_custom_script
+end
+
+trace "current username is %s" lpBuffer
+free_dynamic_library advapi32
+terminate_this_custom_script
+
+function printLastError(msg: string)
+    if DynamicLibrary kernel32 = load_dynamic_library "kernel32.dll"
+    then
+        if GetLastError pGetLastError = get_dynamic_library_procedure "GetLastError" kernel32
+        then
+            int errorCode = pGetLastError()
+            print_help_formatted {text} "%s. Error code %d" msg errorCode
+        end
+        free_dynamic_library kernel32
+    end
+    
+    function GetLastError<stdcall>: int //
+
+end
+
+:name_buf
+hex
+    00(256)
+end
+:size_buf
+hex
+    FF 00 00 00
+end
+
+
+function GetUserNameA<stdcall>(lpBuffer: int, pcbBuffer: int): int

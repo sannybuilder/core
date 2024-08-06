@@ -1,14 +1,35 @@
 use serde::{Deserialize, Deserializer};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum CommandParamType {
-    Int,
-    Float,
-    String,
-    Boolean,
+    Gxt,
+    Pointer,
+    AnyModel,
+    ScriptId,
+    String8,
+    IdeModel,
+    Byte128,
     Arguments,
-    Vector(usize),
-    Any(String),
+    Float,
+    Any,
+}
+
+impl From<u8> for CommandParamType {
+    fn from(val: u8) -> Self {
+        match val {
+            0 => Self::Any,
+            1 => Self::Gxt,
+            2 => Self::Pointer,
+            3 => Self::AnyModel,
+            4 => Self::ScriptId,
+            5 => Self::String8,
+            6 => Self::IdeModel,
+            7 => Self::Byte128,
+            8 => Self::Arguments,
+            9 => Self::Float,
+            _ => Self::Any,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,23 +57,44 @@ pub enum Version {
     _10DE,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Operator {
+    Assignment,
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
+    TimedAddition,
+    TimedSubtraction,
+    CastAssignment,
+    IsEqualTo,
+    IsGreaterThan,
+    IsGreaterOrEqualTo,
+    And,
+    Or,
+    Xor,
+    Not,
+    Mod,
+    ShiftLeft,
+    ShiftRight,
+}
+
 impl<'de> Deserialize<'de> for CommandParamType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         match String::deserialize(deserializer).as_deref() {
-            Ok("float") => Ok(Self::Float),
-            Ok("int" | "label" | "model_any" | "model_char" | "model_object" | "model_vehicle") => {
-                Ok(Self::Int)
-            }
-            Ok("string" | "gxt_key" | "zone_key") => Ok(Self::String),
-            Ok("bool" | "boolean") => Ok(Self::Boolean),
+            Ok("gxt_key") | Ok("zone_key") => Ok(Self::Gxt),
+            Ok("label") => Ok(Self::Pointer),
+            Ok("model_any") | Ok("model_object") => Ok(Self::AnyModel),
+            Ok("model_char") | Ok("model_vehicle") => Ok(Self::IdeModel),
+            Ok("script_id") => Ok(Self::ScriptId),
+            Ok("string128") => Ok(Self::Byte128),
+            Ok("string") => Ok(Self::String8),
             Ok("arguments") => Ok(Self::Arguments),
-            Ok("Object") => Ok(Self::Any("ScriptObject".to_string())),
-            Ok("Vector3") => Ok(Self::Vector(3)),
-            Ok(name) => Ok(Self::Any(name.to_string())),
-            _ => Ok(Self::Int),
+            Ok("float") => Ok(Self::Float),
+            _ => Ok(Self::Any),
         }
     }
 }
@@ -127,6 +169,8 @@ pub struct Command {
     pub platforms: Vec<Platform>,
     #[serde(default, deserialize_with = "convert_version")]
     pub versions: Vec<Version>,
+    #[serde(default, deserialize_with = "convert_operator")]
+    pub operator: Option<Operator>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -221,4 +265,73 @@ where
         _ => vec![],
     };
     Ok(res)
+}
+
+fn convert_operator<'de, D>(deserializer: D) -> Result<Option<Operator>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val = String::deserialize(deserializer)?;
+
+    match val.as_str() {
+        "=" => Ok(Some(Operator::Assignment)),
+        "+" => Ok(Some(Operator::Addition)),
+        "-" => Ok(Some(Operator::Subtraction)),
+        "*" => Ok(Some(Operator::Multiplication)),
+        "/" => Ok(Some(Operator::Division)),
+        "+=@" => Ok(Some(Operator::TimedAddition)),
+        "-=@" => Ok(Some(Operator::TimedSubtraction)),
+        "=#" => Ok(Some(Operator::CastAssignment)),
+        "==" => Ok(Some(Operator::IsEqualTo)),
+        ">" => Ok(Some(Operator::IsGreaterThan)),
+        ">=" => Ok(Some(Operator::IsGreaterOrEqualTo)),
+        "&" => Ok(Some(Operator::And)),
+        "|" => Ok(Some(Operator::Or)),
+        "^" => Ok(Some(Operator::Xor)),
+        "~" => Ok(Some(Operator::Not)),
+        "%" => Ok(Some(Operator::Mod)),
+        "<<" => Ok(Some(Operator::ShiftLeft)),
+        ">>" => Ok(Some(Operator::ShiftRight)),
+        _ => Ok(None),
+    }
+}
+
+impl Into<&str> for Operator {
+    fn into(self) -> &'static str {
+        match self {
+            Operator::Assignment => "=",
+            Operator::Addition => "+",
+            Operator::Subtraction => "-",
+            Operator::Multiplication => "*",
+            Operator::Division => "/",
+            Operator::TimedAddition => "+=@",
+            Operator::TimedSubtraction => "-=@",
+            Operator::CastAssignment => "=#",
+            Operator::IsEqualTo => "==",
+            Operator::IsGreaterThan => ">",
+            Operator::IsGreaterOrEqualTo => ">=",
+            Operator::And => "&",
+            Operator::Or => "|",
+            Operator::Xor => "^",
+            Operator::Not => "~",
+            Operator::Mod => "%",
+            Operator::ShiftLeft => "<<",
+            Operator::ShiftRight => ">>",
+        }
+    }
+}
+
+impl Operator {
+    pub fn is_bitwise(&self) -> bool {
+        match self {
+            Operator::And
+            | Operator::Or
+            | Operator::Xor
+            | Operator::Not
+            | Operator::ShiftLeft
+            | Operator::ShiftRight
+            | Operator::Mod => true,
+            _ => false,
+        }
+    }
 }

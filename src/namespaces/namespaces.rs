@@ -7,7 +7,10 @@ use crate::dictionary::{
     list_num_by_str::ListNumByStr,
 };
 
-use super::library::{Attr, Library};
+use super::{
+    library::{Command, Library},
+    CommandParamType,
+};
 
 /**
  * this is a remnant of old Sanny type system where built-in types as Int, Float, Handle, etc
@@ -24,9 +27,10 @@ pub struct Namespaces {
     enums: Vec<CString>, // case-preserved
     opcodes: Vec<Opcode>,
     short_descriptions: HashMap<OpId, /*short_desc*/ CString>,
-    attrs: HashMap<OpId, Attr>,
+    pub commands: HashMap<OpId, Command>,
+    extensions: HashMap<OpId, String>,
     map_op_by_id: HashMap<OpId, /*opcodes index*/ usize>,
-    map_op_by_name: HashMap<
+    pub map_op_by_name: HashMap<
         /*class_name*/ String,
         HashMap</*member_name*/ String, /*opcodes index*/ usize>,
     >,
@@ -126,7 +130,8 @@ impl Namespaces {
             opcodes: vec![],
             enums: vec![],
             short_descriptions: HashMap::new(),
-            attrs: HashMap::new(),
+            commands: HashMap::new(),
+            extensions: HashMap::new(),
             map_op_by_id: HashMap::new(),
             map_op_by_name: HashMap::new(),
             map_op_by_command_name: HashMap::new(),
@@ -198,11 +203,11 @@ impl Namespaces {
             return None;
         };
 
-        let mut names_str: Vec<String> = vec![];
+        let mut class_names: Vec<String> = vec![];
         while let Some(line) = line_iter.next() {
             if !line.starts_with(|c| c == '#' || c == '$') {
                 self.names.push(CString::new(line).ok()?);
-                names_str.push(String::from(line));
+                class_names.push(String::from(line));
                 continue;
             }
 
@@ -240,26 +245,27 @@ impl Namespaces {
             }
             let name = &line[1..];
 
-            let find_name = match names_str.iter().find(|n| n.eq_ignore_ascii_case(name)) {
+            let find_class_name = match class_names.iter().find(|n| n.eq_ignore_ascii_case(name)) {
                 Some(x) => x,
                 None => continue, // undeclared class -> skip
             };
 
             if line_iter.next()?.eq_ignore_ascii_case("$begin") {
-                let name = &find_name.clone();
+                let class_name = &find_class_name.clone();
                 let mut map: HashMap<String, usize> = HashMap::new();
                 for line in line_iter
                     .by_ref()
                     .take_while(|line| !line.starts_with(|c| c == '#' || c == '$'))
                 {
-                    match self.parse_method(line, name, &mut map) {
+                    match self.parse_method(line, class_name, &mut map) {
                         Some(_) => {}
                         None => {
                             log::debug!("Can't parse the line {}", line);
                         }
                     }
                 }
-                self.map_op_by_name.insert(name.to_ascii_lowercase(), map);
+                self.map_op_by_name
+                    .insert(class_name.to_ascii_lowercase(), map);
             }
         }
         Some(())
@@ -268,7 +274,7 @@ impl Namespaces {
     fn parse_method(
         &mut self,
         line: &str,
-        class_name: &String,
+        class_name: &str,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
         use crate::namespaces::classes_parser::method;
@@ -318,7 +324,7 @@ impl Namespaces {
     fn parse_prop(
         &mut self,
         line: &str,
-        class_name: &String,
+        class_name: &str,
         map: &mut HashMap<String, usize>,
     ) -> Option<()> {
         use crate::namespaces::classes_parser::property;
@@ -352,7 +358,7 @@ impl Namespaces {
                 params.iter().cloned().collect::<Vec<_>>()
             };
 
-            let op_index = self.register_opcode(Opcode {
+            let op = Opcode {
                 hint: self.params_to_string(&params)?,
                 params_len: prop_params.len() as i32,
                 id,
@@ -364,7 +370,9 @@ impl Namespaces {
                 prop_type: OpcodeType::Property,
                 operation: CString::new(operation).ok()?,
                 short_desc: short_desc.clone(),
-            });
+            };
+            let supports_alternate_method_syntax = self.supports_alternate_method_syntax(&op);
+            let op_index = self.register_opcode(op);
             let key = PropKey {
                 name,
                 prop_pos,
@@ -373,8 +381,12 @@ impl Namespaces {
             map.insert(String::from(key).to_ascii_lowercase(), op_index);
             self.props.push(name.to_ascii_lowercase());
 
-            if op_type == OpcodeType::Property {
-                // add a method version of this opcode with all params
+            if supports_alternate_method_syntax {
+                // sb3 quirk
+                // constructors can be written in two ways:
+                // Player.Create($PLAYER_CHAR, #NULL, 2488.5601, -1666.84, 13.38)
+                // $PLAYER_CHAR = Player.Create(#NULL, 2488.5601, -1666.84, 13.38)
+                // hence we need to add a method version of this opcode with all params
                 let op_index = self.register_opcode(Opcode {
                     hint: self.params_to_string(&params)?,
                     params_len: params.len() as i32,
@@ -399,7 +411,7 @@ impl Namespaces {
     fn parse_params(
         &mut self,
         params: &Vec<crate::namespaces::classes_parser::Param>,
-        full_name: &String,
+        full_name: &str,
     ) -> Vec<OpcodeParam> {
         use crate::namespaces::classes_parser::ParamType;
 
@@ -671,7 +683,7 @@ impl Namespaces {
             }
             let op = self.get_opcode_by_index(*index)?;
 
-            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ op.op_type == OpcodeType::Property
+            if op.help_code == -2 /* deprecated */ || /* has the counterpart method */ self.supports_alternate_method_syntax(op)
             {
                 return None;
             };
@@ -680,10 +692,15 @@ impl Namespaces {
         }).collect::<Vec<_>>())
     }
 
+    fn supports_alternate_method_syntax(&self, op: &Opcode) -> bool {
+        op.op_type == OpcodeType::Property //&& self.is_constructor(op.id).unwrap_or(false)
+    }
+
     pub fn has_prop(&self, prop_name: &str) -> bool {
         self.props.contains(&prop_name.to_ascii_lowercase())
     }
 
+    // load a JSON from SBL
     pub fn load_library<'a>(&mut self, file_name: &'a str) -> Option<()> {
         let content = fs::read_to_string(file_name).ok()?;
 
@@ -691,18 +708,17 @@ impl Namespaces {
 
         self.library_version = CString::new(lib.meta.version).ok()?;
 
-        for command in lib
-            .extensions
-            .into_iter()
-            .flat_map(|ext| ext.commands.into_iter())
-            .filter(|c| !c.attrs.is_unsupported)
-        {
-            self.short_descriptions
-                .insert(command.id, CString::new(command.short_desc).ok()?);
-            self.attrs.insert(command.id, command.attrs);
-            self.map_op_by_command_name
-                .insert(command.name.to_ascii_lowercase(), command.id);
+        for ext in lib.extensions.into_iter() {
+            for command in ext.commands.into_iter().filter(|c| !c.attrs.is_unsupported) {
+                self.extensions.insert(command.id, ext.name.clone());
+                self.short_descriptions
+                    .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
+                self.map_op_by_command_name
+                    .insert(command.name.to_ascii_lowercase(), command.id);
+                self.commands.insert(command.id, command);
+            }
         }
+
         Some(())
     }
 
@@ -716,11 +732,15 @@ impl Namespaces {
     }
 
     pub fn is_condition<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_condition)
+        self.commands.get(&id).map(|c| c.attrs.is_condition)
+    }
+
+    pub fn is_constructor<'a>(&self, id: OpId) -> Option<bool> {
+        self.commands.get(&id).map(|c| c.attrs.is_constructor)
     }
 
     pub fn is_branch<'a>(&self, id: OpId) -> Option<bool> {
-        self.attrs.get(&id).map(|attrs| attrs.is_branch)
+        self.commands.get(&id).map(|c| c.attrs.is_branch)
     }
 
     pub fn get_library_version(&self) -> &CString {
@@ -728,9 +748,9 @@ impl Namespaces {
     }
 
     pub fn populate_keywords<'a>(&mut self, dict: &mut DictNumByStr) -> Option<()> {
-        use crate::dictionary::ffi::apply_format_s;
+        use crate::dictionary::ffi::apply_format;
         for (name, op) in self.map_op_by_command_name.iter() {
-            let key = apply_format_s(name, &dict.config.case_format);
+            let key = apply_format(name, &dict.config.case_format)?;
             dict.add(key, *op as _);
         }
         Some(())
@@ -752,5 +772,63 @@ impl Namespaces {
             dict.add(key, *op as _);
         }
         Some(())
+    }
+
+    pub fn populate_extension_list<'a>(&mut self, dict: &mut DictStrByNum) -> Option<()> {
+        for (op, name) in self.extensions.iter() {
+            dict.add(*op as _, CString::new(name.clone()).unwrap());
+        }
+        Some(())
+    }
+
+    pub fn get_input_count<'a>(&self, id: OpId) -> Option<usize> {
+        self.commands.get(&id).map(|c| c.input.len())
+    }
+
+    pub fn get_output_count<'a>(&self, id: OpId) -> Option<usize> {
+        self.commands.get(&id).map(|c| c.output.len())
+    }
+
+    pub fn is_input_of_type(
+        &self,
+        id: OpId,
+        index: usize,
+        _type: CommandParamType,
+    ) -> Option<bool> {
+        self.commands
+            .get(&id)
+            .map(|c| c.input.get(index).map_or(false, |i| i.r#type == _type))
+    }
+
+    pub fn is_output_of_type(
+        &self,
+        id: OpId,
+        index: usize,
+        _type: CommandParamType,
+    ) -> Option<bool> {
+        self.commands
+            .get(&id)
+            .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
+    }
+
+    pub fn get_input_type(
+        &self,
+        id: OpId,
+        index: usize,
+    ) -> Option<&CommandParamType> {
+        self.commands
+            .get(&id)
+            .and_then(|c| c.input.get(index).map(|i| &i.r#type))
+    }
+
+
+    pub fn get_output_type(
+        &self,
+        id: OpId,
+        index: usize,
+    ) -> Option<&CommandParamType> {
+        self.commands
+            .get(&id)
+            .and_then(|c| c.output.get(index).map(|i| &i.r#type))
     }
 }

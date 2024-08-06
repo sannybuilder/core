@@ -1,9 +1,8 @@
-#![feature(never_type)]
-#![feature(hash_drain_filter)]
-
 use ctor::ctor;
 use simplelog::*;
 
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 pub mod common_ffi;
 pub mod dictionary;
@@ -15,6 +14,9 @@ pub mod sdk;
 pub mod update_service;
 pub mod utils;
 pub mod v4;
+pub mod source_map;
+pub mod preprocessor;
+pub mod sanny_update;
 
 #[ctor]
 fn main() {

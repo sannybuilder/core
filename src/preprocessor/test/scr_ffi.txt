@@ -1,0 +1,15 @@
+function ext<stdcall>
+function foo() 
+    while true
+    end
+    function baz
+    end
+    function bar
+        while true
+        end
+        while true
+        end
+    end
+end
+function bar
+end

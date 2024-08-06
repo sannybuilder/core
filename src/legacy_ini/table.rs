@@ -14,19 +14,24 @@ use nom_locate::LocatedSpan;
 use std::collections::HashMap;
 use std::ffi::CString;
 
+use crate::namespaces::{
+    Command, CommandParam, CommandParamSource, CommandParamType, OpId, Operator,
+};
+
 type Span<'a> = LocatedSpan<&'a str>;
 type R<'a, T> = IResult<Span<'a>, T>;
 
 #[derive(Debug, Default)]
 pub struct Opcode {
     num_params: i8,
-    params: HashMap<usize, Param>,
+    params: HashMap</*param index in decompiled file */ usize, Param>,
     words: HashMap<usize, CString>,
+    is_scr: bool,
 }
 
 #[derive(Debug)]
 pub struct Param {
-    real_index: u8,
+    real_index: u8, // param index as the game expects
     param_type: ParamType,
 }
 
@@ -41,9 +46,10 @@ pub enum ParamType {
     String8 = 6, // only lcs
     IdeModel = 7,
     Byte128 = 8, // only SA
+    Float = 9,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Game {
     GTA3,
     VC,
@@ -63,15 +69,25 @@ impl From<u8> for Game {
             4 => Game::VCS,
             5 => Game::SAMOBILE,
             _ => {
-                log::error!("Unknown game: {game}, using SA as the default value");
-                Game::SA
+                log::error!(
+                    "Unknown game: {game}, using default value {:?}",
+                    Game::default()
+                );
+                Default::default()
             }
         }
     }
 }
 
+impl Default for Game {
+    fn default() -> Self {
+        Game::SA
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct OpcodeTable {
+    game: Game,
     opcodes: HashMap<u16, Opcode>,
     files: Vec<String>,
     date: Option<String>,
@@ -154,10 +170,14 @@ pub fn opcode_line(s: Span) -> R<Line> {
                 }
             }
 
+            let is_scr = params.iter().fold(true, |acc, (index, p)| {
+                acc && p.real_index as usize == *index
+            });
             Line::Opcode(
                 id,
                 Opcode {
                     num_params,
+                    is_scr,
                     params,
                     words,
                 },
@@ -233,7 +253,8 @@ pub fn decimal_span(s: Span) -> R<Span> {
 impl OpcodeTable {
     pub fn new(game: Game) -> Self {
         OpcodeTable {
-            max_params: get_game_limit(game),
+            max_params: get_game_limit(&game),
+            game,
             ..Default::default()
         }
     }
@@ -254,6 +275,174 @@ impl OpcodeTable {
         for line in content.lines() {
             self.parse_line(line);
         }
+        return true;
+    }
+
+    fn get_word_for_param(
+        &self,
+        word_index: usize,
+        param_name: &str,
+        c: &Command,
+        param: Option<&CommandParam>,
+    ) -> CString {
+        let mut word = String::new();
+
+        if word_index == 0 {
+            if c.attrs.is_condition {
+                word.push_str("  ");
+            }
+
+            match c.operator {
+                Some(op) if c.input.len() == 1 && c.output.is_empty() => {
+                    // [unary operator]var
+                    word.push_str(op.into()); // add unary operator
+                }
+                Some(op) if op.is_bitwise() | self.is_ternary_command(c) => {
+                    // bitwise & ternary ops don't need keywords
+                }
+                _ => {
+                    word.push_str(c.name.to_lowercase().as_str());
+
+                    if !param_name.is_empty() && !param_name.eq_ignore_ascii_case("self") {
+                        match param.map(|p| &p.source) {
+                            Some(
+                                CommandParamSource::AnyVar
+                                | CommandParamSource::AnyVarGlobal
+                                | CommandParamSource::AnyVarLocal,
+                            ) => {
+                                word.push_str(format!(" {{var_{}}}", param_name).as_str());
+                            }
+                            _ => {
+                                word.push_str(format!(" {{{}}}", param_name).as_str());
+                            }
+                        }
+                    }
+
+                    word.push(' ');
+                }
+            };
+            return CString::new(word).unwrap();
+        }
+
+        if c.operator.is_some() {
+            word.push(' ');
+
+            if self.is_ternary_command(c) {
+                // [var] = [op1] [operator] [op2]
+                if word_index == 1 {
+                    word.push_str(Operator::Assignment.into());
+                }
+                if word_index == 2 {
+                    let op: &str = c.operator.unwrap().into();
+                    word.push_str(op);
+                }
+            } else {
+                // var [operator] [op1]
+                match c.operator {
+                    Some(op) => match op {
+                        Operator::Assignment
+                        | Operator::TimedAddition
+                        | Operator::TimedSubtraction
+                        | Operator::CastAssignment
+                        | Operator::IsEqualTo
+                        | Operator::IsGreaterThan
+                        | Operator::IsGreaterOrEqualTo => word.push_str(op.into()),
+                        Operator::Not => {
+                            word.push_str("= ~");
+                            return CString::new(word).unwrap(); // don't add ' '
+                        }
+                        _ => {
+                            word.push_str(op.into());
+                            word.push_str(Operator::Assignment.into());
+                        }
+                    },
+                    None => {}
+                }
+            }
+        } else if !param_name.is_empty() {
+            match param.map(|p| &p.source) {
+                Some(
+                    CommandParamSource::AnyVar
+                    | CommandParamSource::AnyVarGlobal
+                    | CommandParamSource::AnyVarLocal,
+                ) => {
+                    word.push_str(format!(" {{var_{}}}", param_name).as_str());
+                }
+                _ => {
+                    word.push_str(format!(" {{{}}}", param_name).as_str());
+                }
+            }
+        }
+        word.push(' ');
+        CString::new(word).unwrap()
+    }
+
+    fn is_ternary_command(&self, command: &Command) -> bool {
+        command.input.len() == 2 && command.output.len() == 1 && command.operator.is_some()
+    }
+
+    pub fn load_from_json(&mut self, commands: &HashMap<OpId, Command>) -> bool {
+        for (_, c) in commands {
+            let mut params: HashMap<usize, Param> = HashMap::new();
+
+            let mut is_variadic = false;
+            let mut words: HashMap<usize, CString> = HashMap::new();
+            let iter = c.input.iter().chain(c.output.iter());
+            for (real_index, param) in iter.enumerate() {
+                if param.r#type == CommandParamType::Arguments {
+                    is_variadic = true;
+                }
+
+                // when an operator is used, put output params (if any) before input params
+                // in decompiled code they would look like: [out] = [arg1] [op] [arg2]
+                let index = if c.operator.is_some() {
+                    // only math commands are allowed to reorder arguments
+                    if real_index < c.input.len() {
+                        c.output.len() + real_index
+                    } else {
+                        real_index - c.input.len()
+                    }
+                } else {
+                    real_index // never reorder params in regular commands
+                };
+                params.insert(
+                    index,
+                    Param {
+                        real_index: real_index as u8,
+                        param_type: match param.r#type {
+                            CommandParamType::Gxt => ParamType::Gxt,
+                            CommandParamType::Pointer => ParamType::Pointer,
+                            CommandParamType::AnyModel => ParamType::AnyModel,
+                            CommandParamType::ScriptId => ParamType::ScriptId,
+                            CommandParamType::String8 if self.game == Game::LCS => {
+                                ParamType::String8
+                            }
+                            CommandParamType::IdeModel => ParamType::IdeModel,
+                            CommandParamType::Byte128 => ParamType::Byte128,
+                            CommandParamType::Float => ParamType::Float,
+                            _ => ParamType::Any,
+                        },
+                    },
+                );
+                words.insert(
+                    index,
+                    self.get_word_for_param(index, param.name.trim(), c, Some(param)),
+                );
+            }
+
+            if words.is_empty() {
+                words.insert(0, self.get_word_for_param(0, "", c, None));
+            }
+
+            let opcode = Opcode {
+                num_params: if is_variadic { -1 } else { c.num_params as i8 },
+                params,
+                words,
+                is_scr: true, // all params are in original order (except math)
+            };
+            self.add_opcode(c.id, opcode);
+        }
+
         return true;
     }
 
@@ -328,6 +517,10 @@ impl OpcodeTable {
             .unwrap_or(ParamType::Any)
     }
 
+    pub fn get_param_is_scr(&self, id: u16) -> bool {
+        self.get_opcode(id).map(|opcode| opcode.is_scr).unwrap_or(true)
+    }
+
     pub fn does_word_exist(&self, id: u16, index: usize) -> bool {
         self.get_word(id, index).is_some()
     }
@@ -354,7 +547,7 @@ impl OpcodeTable {
     }
 }
 
-fn get_game_limit(game: Game) -> u8 {
+fn get_game_limit(game: &Game) -> u8 {
     match game {
         Game::GTA3 => 16 + 2,
         Game::VC => 16 + 2,
@@ -435,6 +628,98 @@ mod tests {
         assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
         assert_eq!(opcode_table.get_param_real_index(id, 3), 2);
         assert_eq!(opcode_table.get_param_real_index(id, 4), 3);
+    }
+
+    #[test]
+    fn test_real_index2() {
+        let mut opcode_table = OpcodeTable::new(Game::SA);
+
+        let mut commands = HashMap::new();
+        commands.insert(
+            0x0001,
+            Command {
+                id: 0x0001,
+                name: "INT_ADD".to_string(),
+                num_params: 3,
+                short_desc: "".to_string(),
+                class: None,
+                member: None,
+                attrs: crate::namespaces::Attr::default(),
+                input: vec![
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                ],
+                output: vec![CommandParam {
+                    name: "".to_string(),
+                    r#type: CommandParamType::Any,
+                    source: CommandParamSource::AnyVar,
+                }],
+                platforms: vec![],
+                versions: vec![],
+                // operator: None,
+                operator: Some(Operator::Assignment),
+            },
+        );
+        commands.insert(
+            0x0002,
+            Command {
+                id: 0x0002,
+                name: "INT_CMP".to_string(),
+                num_params: 2,
+                short_desc: "".to_string(),
+                class: None,
+                member: None,
+                attrs: crate::namespaces::Attr::default(),
+                input: vec![
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::IdeModel,
+                        source: CommandParamSource::Any,
+                    },
+                    CommandParam {
+                        name: "".to_string(),
+                        r#type: CommandParamType::AnyModel,
+                        source: CommandParamSource::Any,
+                    },
+                ],
+                output: vec![],
+                platforms: vec![],
+                versions: vec![],
+                operator: Some(Operator::IsEqualTo),
+            },
+        );
+
+        opcode_table.load_from_json(&commands);
+
+        let id = 0x0001;
+        assert_eq!(opcode_table.get_params_count(id), 3);
+
+        assert_eq!(opcode_table.get_param_real_index(id, 0), 2);
+        assert_eq!(opcode_table.get_param_type(id, 0), ParamType::Any);
+
+        assert_eq!(opcode_table.get_param_type(id, 1), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_real_index(id, 1), 0);
+
+        assert_eq!(opcode_table.get_param_type(id, 2), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_real_index(id, 2), 1);
+
+        let id = 0x0002;
+        assert_eq!(opcode_table.get_params_count(id), 2);
+        assert_eq!(opcode_table.get_param_real_index(id, 0), 0);
+        assert_eq!(opcode_table.get_param_real_index(id, 1), 1);
+
+        assert_eq!(opcode_table.get_param_type(id, 0), ParamType::IdeModel);
+        assert_eq!(opcode_table.get_param_type(id, 1), ParamType::AnyModel);
+
+        
     }
 
     #[test]

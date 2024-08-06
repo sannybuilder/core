@@ -1,4 +1,5 @@
 use nom::branch::alt;
+use nom::bytes::complete::tag;
 use nom::character::complete::char;
 use nom::character::complete::one_of;
 use nom::combinator::consumed;
@@ -20,7 +21,7 @@ static ADMA_CHAR: char = '&';
 pub fn variable(s: Span) -> R<Variable> {
     alt((
         map(
-            consumed(tuple((single_variable, array_element_scr))),
+            consumed(tuple((single_variable_or_const, array_element_scr))),
             |(span, (var, (index, len, _type)))| {
                 Variable::ArrayElement(ArrayElementSCR {
                     array_var: Box::new(var),
@@ -32,7 +33,7 @@ pub fn variable(s: Span) -> R<Variable> {
             },
         ),
         map(
-            consumed(tuple((single_variable, array_index))),
+            consumed(tuple((single_variable_or_const, array_index))),
             |(span, (var, index))| {
                 Variable::Indexed(IndexedVariable {
                     var: Box::new(var),
@@ -50,7 +51,7 @@ fn array_element_scr(s: Span) -> R<(Variable, Token, VariableType)> {
     delimited(
         char('('),
         tuple((
-            terminated(single_variable, char(',')),
+            terminated(single_variable_or_const, char(',')),
             literal::decimal,
             array_type,
         )),
@@ -64,13 +65,27 @@ fn array_index(s: Span) -> R<Node> {
         alt((
             map(single_variable, |v| Node::Variable(v)),
             map(literal::decimal, |d| Node::Literal(d)),
+            map(literal::identifier, |d| Node::Literal(d)),
         )),
         char(']'),
     )(s)
 }
 
 fn single_variable(s: Span) -> R<Variable> {
-    alt((local_var, global_var, adma_var))(s)
+    alt((local_var, global_var, adma_var, pop_token, push_token))(s)
+}
+
+fn single_variable_or_const(s: Span) -> R<Variable> {
+    alt((
+        single_variable,
+        map(literal::identifier, |var| {
+            Variable::Local(SingleVariable {
+                name: var.clone(),
+                _type: VariableType::Unknown,
+                token: var,
+            })
+        }),
+    ))(s)
 }
 
 fn local_var(s: Span) -> R<Variable> {
@@ -87,6 +102,18 @@ fn local_var(s: Span) -> R<Variable> {
             })
         },
     )(s)
+}
+
+fn pop_token(s: Span) -> R<Variable> {
+    map(consumed(tag("|>")), |(span, _)| {
+        Variable::Pop(Token::from(span, SyntaxKind::LocalVariable))
+    })(s)
+}
+
+fn push_token(s: Span) -> R<Variable> {
+    map(consumed(tag("|<")), |(span, _)| {
+        Variable::Push(Token::from(span, SyntaxKind::LocalVariable))
+    })(s)
 }
 
 fn global_var(s: Span) -> R<Variable> {
@@ -554,6 +581,71 @@ mod tests {
                         len: 8,
                         syntax_kind: SyntaxKind::IndexedVariable
                     }
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables15() {
+        let (_, ast) = parse("a[0]").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::Indexed(IndexedVariable {
+                    var: Box::new(Variable::Local(SingleVariable {
+                        name: Token {
+                            start: 1,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        },
+                        _type: VariableType::Unknown,
+                        token: Token {
+                            start: 1,
+                            len: 1,
+                            syntax_kind: SyntaxKind::Identifier
+                        }
+                    })),
+                    index: Box::new(Node::Literal(Token {
+                        start: 3,
+                        len: 1,
+                        syntax_kind: SyntaxKind::IntegerLiteral
+                    })),
+                    token: Token {
+                        start: 1,
+                        len: 4,
+                        syntax_kind: SyntaxKind::IndexedVariable
+                    }
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables16() {
+        let (_, ast) = parse("|>").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::Pop(Token {
+                    start: 1,
+                    len: 2,
+                    syntax_kind: SyntaxKind::LocalVariable
+                }))]
+            }
+        );
+    }
+
+    #[test]
+    fn test_parser_variables17() {
+        let (_, ast) = parse("|<").unwrap();
+        assert_eq!(
+            ast,
+            AST {
+                body: vec![Node::Variable(Variable::Push(Token {
+                    start: 1,
+                    len: 2,
+                    syntax_kind: SyntaxKind::LocalVariable
                 }))]
             }
         );

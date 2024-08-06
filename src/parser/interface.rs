@@ -5,6 +5,7 @@ pub enum SyntaxKind {
     Identifier,
     IntegerLiteral,
     FloatLiteral,
+    LabelLiteral,
     ArrayElementSCR,
     IndexedVariable,
     LocalVariable,
@@ -14,6 +15,7 @@ pub enum SyntaxKind {
     BinaryExpr,
     ConstDeclaration,
     ConstInitialization,
+    FunctionSignature,
 
     OperatorBitwiseNot,            // ~
     OperatorBitwiseAnd,            // &
@@ -77,6 +79,7 @@ pub enum Node {
     /// Unary expression, e.g. `~var`
     Unary(UnaryPrefixExpr),
     ConstDeclaration(ConstDeclaration),
+    FunctionSignature(FunctionSignature),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -86,9 +89,21 @@ pub enum Variable {
     Indexed(IndexedVariable),
     ArrayElement(ArrayElementSCR),
     Adma(SingleVariable),
+    Push(Token),
+    Pop(Token),
 }
 
 impl Variable {
+    pub fn get_var_name(&self) -> &Token {
+        match self {
+            Variable::Indexed(v) => &v.var.get_var_name(),
+            Variable::ArrayElement(v) => &v.array_var.get_var_name(),
+            Variable::Local(v) | Variable::Global(v) | Variable::Adma(v) => &v.token,
+            Variable::Pop(v) => v,
+            Variable::Push(v) => v,
+        }
+    }
+
     pub fn is_global(&self) -> bool {
         match self {
             Variable::Global(_) | Variable::Adma(_) => true,
@@ -103,6 +118,7 @@ impl Variable {
             Variable::Local(_) => true,
             Variable::Indexed(v) if v.var.is_local() => true,
             Variable::ArrayElement(v) if v.array_var.is_local() => true,
+            Variable::Pop(_) | Variable::Push(_) => true,
             _ => false,
         }
     }
@@ -185,6 +201,35 @@ pub enum VariableType {
 #[derive(Debug, PartialEq)]
 pub struct AST {
     pub body: Vec<Node>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionSignature {
+    pub name: Token,
+    pub parameters: Vec<FunctionParameter>,
+    pub return_types: Vec<FunctionReturnType>,
+    pub cc: FunctionCC,
+    pub address: Option<Token>,
+    pub token: Token,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum FunctionCC {
+    Local, 
+    Cdecl,
+    Stdcall,
+    Thiscall,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionParameter {
+    pub name: Option<Token>,
+    pub _type: Token,
+    pub token: Token,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionReturnType {
+    pub _type: Token,
+    pub token: Token,
 }
 
 pub type Span<'a> = LocatedSpan<&'a str>;
