@@ -147,7 +147,7 @@ impl LanguageServer {
             .symbols
             .iter()
             .filter_map(|(name, map)| {
-                if name.to_ascii_lowercase().starts_with(&needle) {
+                if name.to_ascii_lowercase().contains(&needle) {
                     for symbol_info in map {
                         if symbol_info.is_visible_at(line_number) {
                             return Some(name.clone());
