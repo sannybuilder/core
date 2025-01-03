@@ -620,7 +620,7 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
-                        .starts_with(&needle)
+                        .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
                 .collect::<Vec<_>>(),
@@ -639,7 +639,7 @@ impl Namespaces {
             members
                 .iter()
                 .filter_map(|(key, member)| {
-                    if !key.starts_with(&needle) {
+                    if !key.contains(&needle) {
                         return None;
                     }
                     let value = match &member.value {
@@ -662,7 +662,7 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
-                        .starts_with(&needle)
+                        .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
                 .collect::<Vec<_>>(),
@@ -678,7 +678,7 @@ impl Namespaces {
         let needle = needle.to_ascii_lowercase();
         Some(members.iter().filter_map(|(member, index)| {
 
-            if !member.starts_with(&needle) {
+            if !member.contains(&needle) {
                 return None;
             }
             let op = self.get_opcode_by_index(*index)?;
