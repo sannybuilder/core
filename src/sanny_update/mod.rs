@@ -1,13 +1,13 @@
 #![feature(io_error_more)]
+use cached::proc_macro::cached;
+use ctor::ctor;
+use serde::Deserialize;
+use simplelog::*;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::atomic::{AtomicI64, Ordering},
 };
-use cached::proc_macro::cached;
-use ctor::ctor;
-use serde::Deserialize;
-use simplelog::*;
 mod ffi;
 mod http_client;
 use const_format::concatcp;
@@ -154,7 +154,7 @@ fn get_update_dir() -> std::io::Result<PathBuf> {
 //     cooldown.timestamp() >= last
 // }
 
-#[cached(time=60)]
+#[cached(time = 60)]
 fn get_from_channel(channel: Channel) -> Option<serde_json::Value> {
     http_client::get_json(&format!("{}/{}", CONTENT_URL, channel))
 }
@@ -220,6 +220,7 @@ fn move_files(src_dir: impl AsRef<Path>, dst_dir: impl AsRef<Path>) -> std::io::
         let dst = dst_dir.as_ref().join(entry.file_name());
         if ty.is_dir() {
             // entry is a folder in source
+            log::debug!("creating folder {}", dst.display());
             fs::create_dir_all(&dst)?;
             move_files(entry.path(), dst)?;
         } else {
@@ -325,9 +326,18 @@ pub fn download_update(channel: Channel, local_version: &str) -> bool {
 
     // // copy all files from pending to cwd
     log::info!("copying files to {}", cwd.display());
-    match move_files(temp, cwd) {
+    match move_files(temp.clone(), cwd) {
         Ok(_) => {
             log::debug!("copied all files");
+            // cleanup update dir
+            log::info!("cleaning up update directory");
+            match std::fs::remove_dir_all(temp) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("cleanup failed: {e}");
+                    return false;
+                }
+            }
         }
         Err(e) => {
             log::error!("copy failed: {e}");
