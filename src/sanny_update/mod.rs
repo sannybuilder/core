@@ -220,6 +220,7 @@ fn move_files(src_dir: impl AsRef<Path>, dst_dir: impl AsRef<Path>) -> std::io::
         let dst = dst_dir.as_ref().join(entry.file_name());
         if ty.is_dir() {
             // entry is a folder in source
+            fs::create_dir_all(&dst)?;
             move_files(entry.path(), dst)?;
         } else {
             // entry is a file in source
