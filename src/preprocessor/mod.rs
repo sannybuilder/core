@@ -99,6 +99,7 @@ impl Preprocessor {
         match self.load_file_source(&file_path) {
             Ok(_) => {}
             Err(e) => {
+                // todo: propagate error to compiler
                 log::error!("{e}");
             }
         }
@@ -117,7 +118,8 @@ impl Preprocessor {
             match self.process_line(line, line_index, &mut in_hex_block) {
                 Ok(_) => {}
                 Err(e) => {
-                    bail!(e);
+                    // bail!(e);
+                    log::error!("{e}");
                 }
             }
         }
@@ -169,19 +171,14 @@ impl Preprocessor {
         };
         let reader = std::io::BufReader::new(file);
         let mut lines = reader.lines_lossy().enumerate();
-        // let reader = std::io::BufReader::new(
-        //     DecodeReaderBytesBuilder::new()
-        //         .encoding(Some(encoding_rs::WINDOWS_1251))
-        //         .build(file),
-        // );
-        // let mut lines = reader.lines().enumerate();
         let mut in_hex_block = false;
         while let Some((line_index, line)) = lines.next() {
             match line {
                 Ok(line) => match self.process_line(line.as_str(), line_index, &mut in_hex_block) {
                     Ok(_) => {}
                     Err(e) => {
-                        bail!(e);
+                        // bail!(e);
+                        log::error!("{e}");
                     }
                 },
                 Err(_) => {
@@ -304,7 +301,9 @@ impl Preprocessor {
                                                 self.reserved_words.map.get(&s.to_ascii_lowercase())
                                             {
                                                 if let TOKEN_FUNCTION = *token_id {
-                                                    if let Err(e) = self.process_new_function(loc.0[loc.1..].trim()) {
+                                                    if let Err(e) = self
+                                                        .process_new_function(loc.0[loc.1..].trim())
+                                                    {
                                                         bail!(e)
                                                     }
                                                 }
