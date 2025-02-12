@@ -612,7 +612,7 @@ impl Namespaces {
     }
 
     pub fn filter_enums_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(
             self.enums
                 .iter()
@@ -620,6 +620,7 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
+                        .replace("_", "")
                         .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
@@ -633,13 +634,13 @@ impl Namespaces {
         needle: &str,
     ) -> Option<Vec<(CString, CString)>> {
         let members = self.get_enum_by_name(enum_name)?;
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
 
         Some(
             members
                 .iter()
                 .filter_map(|(key, member)| {
-                    if !key.contains(&needle) {
+                    if !key.replace("_", "").contains(&needle) {
                         return None;
                     }
                     let value = match &member.value {
@@ -654,7 +655,7 @@ impl Namespaces {
     }
 
     pub fn filter_classes_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(
             self.names
                 .iter()
@@ -662,6 +663,7 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
+                        .replace("_", "")
                         .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
@@ -675,10 +677,10 @@ impl Namespaces {
         needle: &str,
     ) -> Option<Vec<(CString, i32)>> {
         let members = self.get_class_by_name(class_name)?;
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(members.iter().filter_map(|(member, index)| {
 
-            if !member.contains(&needle) {
+            if !member.replace("_", "").contains(&needle) {
                 return None;
             }
             let op = self.get_opcode_by_index(*index)?;
@@ -811,22 +813,13 @@ impl Namespaces {
             .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
     }
 
-    pub fn get_input_type(
-        &self,
-        id: OpId,
-        index: usize,
-    ) -> Option<&CommandParamType> {
+    pub fn get_input_type(&self, id: OpId, index: usize) -> Option<&CommandParamType> {
         self.commands
             .get(&id)
             .and_then(|c| c.input.get(index).map(|i| &i.r#type))
     }
 
-
-    pub fn get_output_type(
-        &self,
-        id: OpId,
-        index: usize,
-    ) -> Option<&CommandParamType> {
+    pub fn get_output_type(&self, id: OpId, index: usize) -> Option<&CommandParamType> {
         self.commands
             .get(&id)
             .and_then(|c| c.output.get(index).map(|i| &i.r#type))

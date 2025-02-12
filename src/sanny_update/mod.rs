@@ -291,14 +291,14 @@ fn delete_files(src_dir: impl AsRef<Path>, extension: &str) -> std::io::Result<(
 }
 
 pub fn download_update(channel: Channel, local_version: &str) -> bool {
-    log::info!("downloading update from channel {channel}");
+    log::info!("downloading update from channel {channel} for version {local_version}");
 
     let Some(url) = get_download_link(channel, local_version) else {
         log::error!("failed to get download link");
         return false;
     };
 
-    log::debug!("downloading archive from {}", url);
+    log::info!("downloading archive from {}", url);
 
     let Some(buf) = http_client::get_binary(&url) else {
         log::error!("failed to download archive");
@@ -359,16 +359,13 @@ pub fn has_update(channel: Channel, local_version: &str) -> bool {
     // }
     // store_update_check_timestamp();
 
-    log::info!("checking for updates from channel {channel}");
+    log::info!("checking for updates from channel {channel} for version {local_version}");
     let Some(remote_version) = get_latest_version_from_github(channel) else {
         log::error!("failed to get remote snapshot");
         return false;
     };
     let remote_version = Version::from(&remote_version);
-    log::debug!("remote version: {:?}", remote_version);
-
     let local_version = Version::from(local_version);
-    log::debug!("local version: {:?}", local_version);
 
     if local_version >= remote_version {
         log::info!("already on latest version. no update needed");
