@@ -724,6 +724,18 @@ impl Namespaces {
         Some(())
     }
 
+    pub fn get_command_description_with_arguments<'a>(&self, id: OpId) -> Option<CString> {
+        let command = self.commands.get(&id)?;
+        let mut snippet = super::snippet::command_to_snippet_line(command);
+
+        if command.short_desc.len() > 0 {
+            snippet.push_str(" - ");
+            snippet.push_str(command.short_desc.as_str());
+        }
+
+        Some(CString::new(snippet).ok()?)
+    }
+
     pub fn get_short_description<'a>(&self, id: OpId) -> Option<&CString> {
         self.short_descriptions.get(&id)
     }
@@ -795,7 +807,7 @@ impl Namespaces {
         &self,
         id: OpId,
         index: usize,
-        _type: CommandParamType,
+        _type: &str,
     ) -> Option<bool> {
         self.commands
             .get(&id)
@@ -806,20 +818,20 @@ impl Namespaces {
         &self,
         id: OpId,
         index: usize,
-        _type: CommandParamType,
+        _type: &str,
     ) -> Option<bool> {
         self.commands
             .get(&id)
             .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
     }
 
-    pub fn get_input_type(&self, id: OpId, index: usize) -> Option<&CommandParamType> {
+    pub fn get_input_type(&self, id: OpId, index: usize) -> Option<&String> {
         self.commands
             .get(&id)
             .and_then(|c| c.input.get(index).map(|i| &i.r#type))
     }
 
-    pub fn get_output_type(&self, id: OpId, index: usize) -> Option<&CommandParamType> {
+    pub fn get_output_type(&self, id: OpId, index: usize) -> Option<&String> {
         self.commands
             .get(&id)
             .and_then(|c| c.output.get(index).map(|i| &i.r#type))

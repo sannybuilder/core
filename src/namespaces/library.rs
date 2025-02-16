@@ -32,7 +32,7 @@ impl From<u8> for CommandParamType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CommandParamSource {
     Any,
     AnyVar,
@@ -79,25 +79,6 @@ pub enum Operator {
     ShiftRight,
 }
 
-impl<'de> Deserialize<'de> for CommandParamType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match String::deserialize(deserializer).as_deref() {
-            Ok("gxt_key") | Ok("zone_key") => Ok(Self::Gxt),
-            Ok("label") => Ok(Self::Pointer),
-            Ok("model_any") | Ok("model_object") => Ok(Self::AnyModel),
-            Ok("model_char") | Ok("model_vehicle") => Ok(Self::IdeModel),
-            Ok("script_id") => Ok(Self::ScriptId),
-            Ok("string128") => Ok(Self::Byte128),
-            Ok("string") => Ok(Self::String8),
-            Ok("arguments") => Ok(Self::Arguments),
-            Ok("float") => Ok(Self::Float),
-            _ => Ok(Self::Any),
-        }
-    }
-}
 
 impl<'de> Deserialize<'de> for CommandParamSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -142,11 +123,12 @@ pub struct Attr {
     pub is_variadic: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct CommandParam {
     pub r#name: String,
     pub r#source: CommandParamSource,
-    pub r#type: CommandParamType,
+    #[serde(default, deserialize_with = "lowercase")]
+    pub r#type: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -224,6 +206,14 @@ where
         Ok(res) => Ok(res),
         Err(e) => Err(serde::de::Error::custom(e)),
     }
+}
+
+fn lowercase<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let val = String::deserialize(deserializer)?;
+    Ok(val.to_lowercase())
 }
 
 fn convert_platform<'de, D>(deserializer: D) -> Result<Vec<Platform>, D::Error>

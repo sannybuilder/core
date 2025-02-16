@@ -389,7 +389,7 @@ impl OpcodeTable {
             let mut words: HashMap<usize, CString> = HashMap::new();
             let iter = c.input.iter().chain(c.output.iter());
             for (real_index, param) in iter.enumerate() {
-                if param.r#type == CommandParamType::Arguments {
+                if param.r#type.eq("arguments") {
                     is_variadic = true;
                 }
 
@@ -409,17 +409,15 @@ impl OpcodeTable {
                     index,
                     Param {
                         real_index: real_index as u8,
-                        param_type: match param.r#type {
-                            CommandParamType::Gxt => ParamType::Gxt,
-                            CommandParamType::Pointer => ParamType::Pointer,
-                            CommandParamType::AnyModel => ParamType::AnyModel,
-                            CommandParamType::ScriptId => ParamType::ScriptId,
-                            CommandParamType::String8 if self.game == Game::LCS => {
-                                ParamType::String8
-                            }
-                            CommandParamType::IdeModel => ParamType::IdeModel,
-                            CommandParamType::Byte128 => ParamType::Byte128,
-                            CommandParamType::Float => ParamType::Float,
+                        param_type: match param.r#type.as_str() {
+                            "zone_key" | "gxt_key" => ParamType::Gxt,
+                            "label" => ParamType::Pointer,
+                            "model_any" | "model_object" => ParamType::AnyModel,
+                            "script_id" => ParamType::ScriptId,
+                            "string" if self.game == Game::LCS => ParamType::String8,
+                            "model_char" | "model_vehicle" => ParamType::IdeModel,
+                            "string128" => ParamType::Byte128,
+                            "float" => ParamType::Float,
                             _ => ParamType::Any,
                         },
                     },
@@ -518,7 +516,9 @@ impl OpcodeTable {
     }
 
     pub fn get_param_is_scr(&self, id: u16) -> bool {
-        self.get_opcode(id).map(|opcode| opcode.is_scr).unwrap_or(true)
+        self.get_opcode(id)
+            .map(|opcode| opcode.is_scr)
+            .unwrap_or(true)
     }
 
     pub fn does_word_exist(&self, id: u16, index: usize) -> bool {
@@ -648,18 +648,18 @@ mod tests {
                 input: vec![
                     CommandParam {
                         name: "".to_string(),
-                        r#type: CommandParamType::IdeModel,
+                        r#type: "model_char".to_string(),
                         source: CommandParamSource::Any,
                     },
                     CommandParam {
                         name: "".to_string(),
-                        r#type: CommandParamType::IdeModel,
+                        r#type: "model_char".to_string(),
                         source: CommandParamSource::Any,
                     },
                 ],
                 output: vec![CommandParam {
                     name: "".to_string(),
-                    r#type: CommandParamType::Any,
+                    r#type: "int".to_string(),
                     source: CommandParamSource::AnyVar,
                 }],
                 platforms: vec![],
@@ -681,12 +681,12 @@ mod tests {
                 input: vec![
                     CommandParam {
                         name: "".to_string(),
-                        r#type: CommandParamType::IdeModel,
+                        r#type: "model_char".to_string(),
                         source: CommandParamSource::Any,
                     },
                     CommandParam {
                         name: "".to_string(),
-                        r#type: CommandParamType::AnyModel,
+                        r#type: "model_char".to_string(),
                         source: CommandParamSource::Any,
                     },
                 ],
@@ -718,8 +718,6 @@ mod tests {
 
         assert_eq!(opcode_table.get_param_type(id, 0), ParamType::IdeModel);
         assert_eq!(opcode_table.get_param_type(id, 1), ParamType::AnyModel);
-
-        
     }
 
     #[test]
