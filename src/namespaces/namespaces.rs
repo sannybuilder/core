@@ -724,15 +724,9 @@ impl Namespaces {
         Some(())
     }
 
-    pub fn get_command_description_with_arguments<'a>(&self, id: OpId) -> Option<CString> {
+    pub fn get_command_snippet_line<'a>(&self, id: OpId) -> Option<CString> {
         let command = self.commands.get(&id)?;
         let mut snippet = super::snippet::command_to_snippet_line(command);
-
-        if command.short_desc.len() > 0 {
-            snippet.push_str(" - ");
-            snippet.push_str(command.short_desc.as_str());
-        }
-
         Some(CString::new(snippet).ok()?)
     }
 
@@ -803,26 +797,20 @@ impl Namespaces {
         self.commands.get(&id).map(|c| c.output.len())
     }
 
-    pub fn is_input_of_type(
-        &self,
-        id: OpId,
-        index: usize,
-        _type: &str,
-    ) -> Option<bool> {
-        self.commands
-            .get(&id)
-            .map(|c| c.input.get(index).map_or(false, |i| i.r#type == _type))
+    pub fn is_input_of_type(&self, id: OpId, index: usize, _type: &str) -> Option<bool> {
+        self.commands.get(&id).map(|c| {
+            c.input
+                .get(index)
+                .map_or(false, |i| i.r#type.eq_ignore_ascii_case(_type))
+        })
     }
 
-    pub fn is_output_of_type(
-        &self,
-        id: OpId,
-        index: usize,
-        _type: &str,
-    ) -> Option<bool> {
-        self.commands
-            .get(&id)
-            .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
+    pub fn is_output_of_type(&self, id: OpId, index: usize, _type: &str) -> Option<bool> {
+        self.commands.get(&id).map(|c| {
+            c.output
+                .get(index)
+                .map_or(false, |i| i.r#type.eq_ignore_ascii_case(_type))
+        })
     }
 
     pub fn get_input_type(&self, id: OpId, index: usize) -> Option<&String> {

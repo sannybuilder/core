@@ -127,7 +127,6 @@ pub struct Attr {
 pub struct CommandParam {
     pub r#name: String,
     pub r#source: CommandParamSource,
-    #[serde(default, deserialize_with = "lowercase")]
     pub r#type: String,
 }
 

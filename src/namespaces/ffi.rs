@@ -1,5 +1,5 @@
 use crate::common_ffi::*;
-use crate::namespaces::{namespaces::*, CommandParamType};
+use crate::namespaces::{namespaces::*, snippet, CommandParamType};
 
 #[no_mangle]
 pub extern "C" fn classes_new() -> *mut Namespaces {
@@ -399,8 +399,19 @@ pub unsafe extern "C" fn classes_get_command_description_with_arguments(
 ) -> bool {
     boolclosure! {{
         use std::ffi::CString;
-        let v = ns.as_mut()?.get_command_description_with_arguments(opcode)?;
+        let v = ns.as_mut()?.get_command_snippet_line(opcode)?;
         *out = CString::new(v).unwrap().into_raw();
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_generate_examples(ns: *mut Namespaces, out: *mut PChar) -> bool {
+    boolclosure! {{
+        use std::ffi::CString;
+        let commands = ns.as_mut()?.commands.values().collect::<Vec<_>>();
+        let examples = snippet::generate_opcodes_text(commands);
+        *out = CString::new(examples).unwrap().into_raw();
         Some(())
     }}
 }

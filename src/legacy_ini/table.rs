@@ -389,7 +389,7 @@ impl OpcodeTable {
             let mut words: HashMap<usize, CString> = HashMap::new();
             let iter = c.input.iter().chain(c.output.iter());
             for (real_index, param) in iter.enumerate() {
-                if param.r#type.eq("arguments") {
+                if param.r#type.eq_ignore_ascii_case("arguments") {
                     is_variadic = true;
                 }
 

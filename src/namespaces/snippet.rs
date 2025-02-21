@@ -1,4 +1,13 @@
-use super::{classes_parser::Param, Command, CommandParam, CommandParamSource, Operator};
+use super::{classes_parser::Param, Command, CommandParam, CommandParamSource, Library, Operator};
+
+pub fn generate_opcodes_text(commands: Vec<&Command>) -> String {
+    commands
+        .iter()
+        .filter(|c| !c.attrs.is_unsupported && !c.attrs.is_nop)
+        .map(|c| command_to_snippet_line(c))
+        .collect::<Vec<String>>()
+        .join("\n")
+}
 
 pub fn command_to_snippet_line(command: &Command) -> String {
     let mut line = format!("{{{:04X}:}} ", command.id);
