@@ -686,7 +686,7 @@ mod tests {
                     },
                     CommandParam {
                         name: "".to_string(),
-                        r#type: "model_char".to_string(),
+                        r#type: "model_any".to_string(),
                         source: CommandParamSource::Any,
                     },
                 ],

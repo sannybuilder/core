@@ -726,7 +726,7 @@ impl Namespaces {
 
     pub fn get_command_snippet_line<'a>(&self, id: OpId) -> Option<CString> {
         let command = self.commands.get(&id)?;
-        let mut snippet = super::snippet::command_to_snippet_line(command);
+        let mut snippet = super::snippet::command_to_snippet_line(command, false);
         Some(CString::new(snippet).ok()?)
     }
 
