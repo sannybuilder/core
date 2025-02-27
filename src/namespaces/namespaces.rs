@@ -708,7 +708,9 @@ impl Namespaces {
 
         let lib = serde_json::from_str::<Library>(content.as_str()).ok()?;
 
-        self.library_version = CString::new(lib.meta.version).ok()?;
+        if self.library_version.is_empty() {
+            self.library_version = CString::new(lib.meta.version).ok()?;
+        }
 
         for ext in lib.extensions.into_iter() {
             for command in ext.commands.into_iter().filter(|c| !c.attrs.is_unsupported) {
