@@ -714,7 +714,21 @@ impl Namespaces {
 
         for ext in lib.extensions.into_iter() {
             for command in ext.commands.into_iter().filter(|c| !c.attrs.is_unsupported) {
-                self.extensions.insert(command.id, ext.name.clone());
+                // id may belong to multiple extensions
+                match self.extensions.get_mut(&command.id) {
+                    Some(x) => {
+                        let mut exts = x.split(',').collect::<Vec<&str>>();
+                        exts.push(ext.name.as_str());
+                        exts.sort();
+                        exts.dedup();
+
+                        *x = exts.join(",");
+                    }
+                    None => {
+                        self.extensions.insert(command.id, ext.name.clone());
+                    }
+                };
+
                 self.short_descriptions
                     .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
                 self.map_op_by_command_name
