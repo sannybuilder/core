@@ -612,7 +612,7 @@ impl Namespaces {
     }
 
     pub fn filter_enums_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(
             self.enums
                 .iter()
@@ -620,7 +620,8 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
-                        .starts_with(&needle)
+                        .replace("_", "")
+                        .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
                 .collect::<Vec<_>>(),
@@ -633,13 +634,13 @@ impl Namespaces {
         needle: &str,
     ) -> Option<Vec<(CString, CString)>> {
         let members = self.get_enum_by_name(enum_name)?;
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
 
         Some(
             members
                 .iter()
                 .filter_map(|(key, member)| {
-                    if !key.starts_with(&needle) {
+                    if !key.replace("_", "").contains(&needle) {
                         return None;
                     }
                     let value = match &member.value {
@@ -654,7 +655,7 @@ impl Namespaces {
     }
 
     pub fn filter_classes_by_name(&self, needle: &str) -> Option<Vec<(CString, CString)>> {
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(
             self.names
                 .iter()
@@ -662,7 +663,8 @@ impl Namespaces {
                     name.to_str()
                         .ok()?
                         .to_ascii_lowercase()
-                        .starts_with(&needle)
+                        .replace("_", "")
+                        .contains(&needle)
                         .then_some((name.clone(), CString::new("").ok()?))
                 })
                 .collect::<Vec<_>>(),
@@ -675,10 +677,10 @@ impl Namespaces {
         needle: &str,
     ) -> Option<Vec<(CString, i32)>> {
         let members = self.get_class_by_name(class_name)?;
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
         Some(members.iter().filter_map(|(member, index)| {
 
-            if !member.starts_with(&needle) {
+            if !member.replace("_", "").contains(&needle) {
                 return None;
             }
             let op = self.get_opcode_by_index(*index)?;
@@ -706,11 +708,27 @@ impl Namespaces {
 
         let lib = serde_json::from_str::<Library>(content.as_str()).ok()?;
 
-        self.library_version = CString::new(lib.meta.version).ok()?;
+        if self.library_version.is_empty() {
+            self.library_version = CString::new(lib.meta.version).ok()?;
+        }
 
         for ext in lib.extensions.into_iter() {
             for command in ext.commands.into_iter().filter(|c| !c.attrs.is_unsupported) {
-                self.extensions.insert(command.id, ext.name.clone());
+                // id may belong to multiple extensions
+                match self.extensions.get_mut(&command.id) {
+                    Some(x) => {
+                        let mut exts = x.split(',').collect::<Vec<&str>>();
+                        exts.push(ext.name.as_str());
+                        exts.sort();
+                        exts.dedup();
+
+                        *x = exts.join(",");
+                    }
+                    None => {
+                        self.extensions.insert(command.id, ext.name.clone());
+                    }
+                };
+
                 self.short_descriptions
                     .insert(command.id, CString::new(command.short_desc.clone()).ok()?);
                 self.map_op_by_command_name
@@ -720,6 +738,12 @@ impl Namespaces {
         }
 
         Some(())
+    }
+
+    pub fn get_command_snippet_line<'a>(&self, id: OpId) -> Option<CString> {
+        let command = self.commands.get(&id)?;
+        let mut snippet = super::snippet::command_to_snippet_line(command, false);
+        Some(CString::new(snippet).ok()?)
     }
 
     pub fn get_short_description<'a>(&self, id: OpId) -> Option<&CString> {
@@ -789,44 +813,29 @@ impl Namespaces {
         self.commands.get(&id).map(|c| c.output.len())
     }
 
-    pub fn is_input_of_type(
-        &self,
-        id: OpId,
-        index: usize,
-        _type: CommandParamType,
-    ) -> Option<bool> {
-        self.commands
-            .get(&id)
-            .map(|c| c.input.get(index).map_or(false, |i| i.r#type == _type))
+    pub fn is_input_of_type(&self, id: OpId, index: usize, _type: &str) -> Option<bool> {
+        self.commands.get(&id).map(|c| {
+            c.input
+                .get(index)
+                .map_or(false, |i| i.r#type.eq_ignore_ascii_case(_type))
+        })
     }
 
-    pub fn is_output_of_type(
-        &self,
-        id: OpId,
-        index: usize,
-        _type: CommandParamType,
-    ) -> Option<bool> {
-        self.commands
-            .get(&id)
-            .map(|c| c.output.get(index).map_or(false, |i| i.r#type == _type))
+    pub fn is_output_of_type(&self, id: OpId, index: usize, _type: &str) -> Option<bool> {
+        self.commands.get(&id).map(|c| {
+            c.output
+                .get(index)
+                .map_or(false, |i| i.r#type.eq_ignore_ascii_case(_type))
+        })
     }
 
-    pub fn get_input_type(
-        &self,
-        id: OpId,
-        index: usize,
-    ) -> Option<&CommandParamType> {
+    pub fn get_input_type(&self, id: OpId, index: usize) -> Option<&String> {
         self.commands
             .get(&id)
             .and_then(|c| c.input.get(index).map(|i| &i.r#type))
     }
 
-
-    pub fn get_output_type(
-        &self,
-        id: OpId,
-        index: usize,
-    ) -> Option<&CommandParamType> {
+    pub fn get_output_type(&self, id: OpId, index: usize) -> Option<&String> {
         self.commands
             .get(&id)
             .and_then(|c| c.output.get(index).map(|i| &i.r#type))

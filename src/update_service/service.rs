@@ -74,11 +74,10 @@ impl UpdateService {
 
             let classes_path = x.next();
             let enums_path = x.next();
-            let examples_path = x.next();
 
             let result = match download_library(game, library_path) {
                 Ok(v) => {
-                    download_config_files(classes_path, enums_path, examples_path, game);
+                    download_config_files(classes_path, enums_path, game);
                     std::ffi::CString::new(v).unwrap()
                 }
                 Err(e) => {
@@ -182,7 +181,6 @@ fn auto_update(options: String) -> Result<String, Box<dyn Error>> {
         let library_path = x.next();
         let classes_path = x.next();
         let enums_path = x.next();
-        let examples_path = x.next();
 
         let Some(file_name) = get_library_json_name(&game) else {
             log::error!("Unsupported game {game}");
@@ -213,7 +211,7 @@ fn auto_update(options: String) -> Result<String, Box<dyn Error>> {
             log::info!("Saving new file {}", destination);
             std::fs::write(destination, &decoded)?;
 
-            download_config_files(classes_path, enums_path, examples_path, game);
+            download_config_files(classes_path, enums_path, game);
             let lib = serde_json::from_str::<crate::namespaces::Library>(decoded.as_str())?;
 
             versions.push_str(format!("{} {}", game, lib.meta.version).as_str());
@@ -225,12 +223,11 @@ fn auto_update(options: String) -> Result<String, Box<dyn Error>> {
 fn download_config_files(
     classes_path: Option<&str>,
     enums_path: Option<&str>,
-    examples_path: Option<&str>,
     game: &str,
 ) {
-    ["classes.db", "enums.txt", "opcodes.txt"]
+    ["classes.db", "enums.txt"]
         .iter()
-        .zip([classes_path, enums_path, examples_path].iter())
+        .zip([classes_path, enums_path].iter())
         .for_each(|(file, path)| match path {
             Some(path) if !path.is_empty() => {
                 if let Err(e) = download_text_file(game, file, path) {

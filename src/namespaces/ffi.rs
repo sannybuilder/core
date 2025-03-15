@@ -1,5 +1,5 @@
 use crate::common_ffi::*;
-use crate::namespaces::{namespaces::*, CommandParamType};
+use crate::namespaces::{namespaces::*, snippet, CommandParamType};
 
 #[no_mangle]
 pub extern "C" fn classes_new() -> *mut Namespaces {
@@ -344,26 +344,14 @@ pub unsafe extern "C" fn classes_get_output_count_by_id(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn classes_is_input_of_type(
+pub unsafe extern "C" fn classes_does_this_argument_have_type_arguments(
     ns: *mut Namespaces,
     opcode: OpId,
     index: usize,
     _type: u8,
 ) -> bool {
     boolclosure! {{
-        ns.as_mut()?.is_input_of_type(opcode, index, _type.into())?.then_some(())
-    }}
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn classes_is_output_of_type(
-    ns: *mut Namespaces,
-    opcode: OpId,
-    index: usize,
-    _type: u8,
-) -> bool {
-    boolclosure! {{
-        ns.as_mut()?.is_output_of_type(opcode, index, _type.into())?.then_some(())
+        ns.as_mut()?.is_input_of_type(opcode, index, "arguments")?.then_some(())
     }}
 }
 
@@ -376,9 +364,9 @@ pub unsafe extern "C" fn classes_get_input_type(
 ) -> bool {
     boolclosure! {{
         ns.as_mut()?.get_input_type(opcode, index).map(|x| *_type = {
-            match x {
-                CommandParamType::Float => 2,
-                CommandParamType::String8 | CommandParamType::Gxt => 3,
+            match x.as_str() {
+                "float" => 2,
+                "string" | "gxt_key" | "zone_key" => 3,
                 _ => 1,
             }
         })
@@ -394,12 +382,37 @@ pub unsafe extern "C" fn classes_get_output_type(
 ) -> bool {
     boolclosure! {{
         ns.as_mut()?.get_output_type(opcode, index).map(|x| *_type = {
-            match x {
-                CommandParamType::Float => 2,
-                CommandParamType::String8 | CommandParamType::Gxt => 3,
+            match x.as_str() {
+                "float" => 2,
+                "string" | "gxt_key" | "zone_key" => 3,
                 _ => 1,
             }
         })
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_get_command_description_with_arguments(
+    ns: *mut Namespaces,
+    opcode: OpId,
+    out: *mut PChar,
+) -> bool {
+    boolclosure! {{
+        use std::ffi::CString;
+        let v = ns.as_mut()?.get_command_snippet_line(opcode)?;
+        *out = CString::new(v).unwrap().into_raw();
+        Some(())
+    }}
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn classes_generate_examples(ns: *mut Namespaces, out: *mut PChar) -> bool {
+    boolclosure! {{
+        use std::ffi::CString;
+        let commands = ns.as_mut()?.commands.values().collect::<Vec<_>>();
+        let examples = snippet::generate_opcodes_text(commands);
+        *out = CString::new(examples).unwrap().into_raw();
+        Some(())
     }}
 }
 

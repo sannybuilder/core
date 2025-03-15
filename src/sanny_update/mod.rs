@@ -1,13 +1,13 @@
 #![feature(io_error_more)]
+use cached::proc_macro::cached;
+use ctor::ctor;
+use serde::Deserialize;
+use simplelog::*;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::atomic::{AtomicI64, Ordering},
 };
-use cached::proc_macro::cached;
-use ctor::ctor;
-use serde::Deserialize;
-use simplelog::*;
 mod ffi;
 mod http_client;
 use const_format::concatcp;
@@ -154,7 +154,7 @@ fn get_update_dir() -> std::io::Result<PathBuf> {
 //     cooldown.timestamp() >= last
 // }
 
-#[cached(time=60)]
+#[cached(time = 60)]
 fn get_from_channel(channel: Channel) -> Option<serde_json::Value> {
     http_client::get_json(&format!("{}/{}", CONTENT_URL, channel))
 }
@@ -220,6 +220,8 @@ fn move_files(src_dir: impl AsRef<Path>, dst_dir: impl AsRef<Path>) -> std::io::
         let dst = dst_dir.as_ref().join(entry.file_name());
         if ty.is_dir() {
             // entry is a folder in source
+            log::debug!("creating folder {}", dst.display());
+            fs::create_dir_all(&dst)?;
             move_files(entry.path(), dst)?;
         } else {
             // entry is a file in source
@@ -289,14 +291,14 @@ fn delete_files(src_dir: impl AsRef<Path>, extension: &str) -> std::io::Result<(
 }
 
 pub fn download_update(channel: Channel, local_version: &str) -> bool {
-    log::info!("downloading update from channel {channel}");
+    log::info!("downloading update from channel {channel} for version {local_version}");
 
     let Some(url) = get_download_link(channel, local_version) else {
         log::error!("failed to get download link");
         return false;
     };
 
-    log::debug!("downloading archive from {}", url);
+    log::info!("downloading archive from {}", url);
 
     let Some(buf) = http_client::get_binary(&url) else {
         log::error!("failed to download archive");
@@ -324,9 +326,18 @@ pub fn download_update(channel: Channel, local_version: &str) -> bool {
 
     // // copy all files from pending to cwd
     log::info!("copying files to {}", cwd.display());
-    match move_files(temp, cwd) {
+    match move_files(temp.clone(), cwd) {
         Ok(_) => {
             log::debug!("copied all files");
+            // cleanup update dir
+            log::info!("cleaning up update directory");
+            match std::fs::remove_dir_all(temp) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("cleanup failed: {e}");
+                    return false;
+                }
+            }
         }
         Err(e) => {
             log::error!("copy failed: {e}");
@@ -348,16 +359,13 @@ pub fn has_update(channel: Channel, local_version: &str) -> bool {
     // }
     // store_update_check_timestamp();
 
-    log::info!("checking for updates from channel {channel}");
+    log::info!("checking for updates from channel {channel} for version {local_version}");
     let Some(remote_version) = get_latest_version_from_github(channel) else {
         log::error!("failed to get remote snapshot");
         return false;
     };
     let remote_version = Version::from(&remote_version);
-    log::debug!("remote version: {:?}", remote_version);
-
     let local_version = Version::from(local_version);
-    log::debug!("local version: {:?}", local_version);
 
     if local_version >= remote_version {
         log::info!("already on latest version. no update needed");

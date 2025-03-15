@@ -141,13 +141,13 @@ impl LanguageServer {
     ) -> Option<Vec<String>> {
         let st = SYMBOL_TABLES.lock().unwrap();
         let table = st.get(&handle)?;
-        let needle = needle.to_ascii_lowercase();
+        let needle = needle.to_ascii_lowercase().replace("_", "");
 
         let list = table
             .symbols
             .iter()
             .filter_map(|(name, map)| {
-                if name.to_ascii_lowercase().starts_with(&needle) {
+                if name.to_ascii_lowercase().replace("_", "").contains(&needle) {
                     for symbol_info in map {
                         if symbol_info.is_visible_at(line_number) {
                             return Some(name.clone());
