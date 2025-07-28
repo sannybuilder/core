@@ -224,6 +224,7 @@ pub enum FunctionCC {
 pub struct FunctionParameter {
     pub name: Option<Token>,
     pub _type: Token,
+    pub size: Option<Token>,
     pub token: Token,
 }
 #[derive(Debug, PartialEq, Clone)]

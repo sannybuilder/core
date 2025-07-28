@@ -181,6 +181,13 @@ pub unsafe extern "C" fn language_service_format_function_signature(
             .map(|param|{
                 let type_token = token_str(line, &param._type);
                 let name_token = param.name.as_ref().map(|name| token_str(line, name));
+                let size_token = param.size.as_ref().map(|size| token_str(line, size));
+
+                let type_token = if let Some(size) = size_token {
+                    format!("{}[{}]", type_token, size)
+                } else {
+                    type_token.to_string()
+                };
 
                 match name_token {
                     Some(name) => format!("\"{}: {}\"", name, type_token),
