@@ -1,6 +1,6 @@
 [package]
 name = "sanny_builder_core"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Seemann <mail@sannybuilder.com>"]
 edition = "2021"
 
@@ -34,3 +34,4 @@ lines_lossy = "0.1.0"
 zip = { git  = "https://github.com/x87/zip.git" }
 const_format = "0.2.32"
 cached = "0.50.0"
+gta-ide-parser = "0.0.4"

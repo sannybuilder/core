@@ -17,6 +17,7 @@ pub mod v4;
 pub mod source_map;
 pub mod preprocessor;
 pub mod sanny_update;
+pub mod ide;
 
 #[ctor]
 fn main() {
@@ -37,5 +38,5 @@ fn main() {
         std::fs::File::create(cwd.join("core.log")).unwrap(),
     );
 
-    log::info!("core library loaded");
+    log::info!("core library {} loaded", env!("CARGO_PKG_VERSION"));
 }
