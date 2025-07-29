@@ -12,6 +12,8 @@ pub enum ModelType {
     Object,
     Vehicle,
     Ped,
+    Weapon,
+    Hier,
 }
 
 #[repr(C)]
@@ -58,6 +60,8 @@ impl ModelList {
                     "objs" | "tobj" | "anim" | "tanm" => ModelType::Object,
                     "cars" => ModelType::Vehicle,
                     "peds" => ModelType::Ped,
+                    "weap" => ModelType::Weapon,
+                    "hier" => ModelType::Hier,
                     _ => {
                         continue;
                     }
