@@ -150,7 +150,18 @@ impl Namespaces {
         use crate::namespaces::enum_parser::{parse_enums, EnumItems};
 
         let content = std::fs::read_to_string(file_name).ok()?;
-        let (_, enums) = parse_enums(&content).ok()?;
+        let enums = match parse_enums(&content) {
+            Ok((rest, enums)) => {
+                if !rest.is_empty() {
+                    log::warn!("Some enums could not be parsed: {rest} in file: {file_name}");
+                }
+                enums
+            }
+            Err(e) => {
+                log::error!("Failed on parsing file {file_name}: {e}");
+                return None;
+            }
+        };
         for e in enums {
             let mut members = HashMap::new();
             match e.items {

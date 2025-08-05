@@ -61,22 +61,29 @@ fn function_arguments(s: Span) -> R<Vec<FunctionParameter>> {
             helpers::ws(tag("(")),
             separated_list0(
                 helpers::ws(tag(",")),
-                consumed(pair(
-                    opt(terminated(
+                consumed(tuple((
+                    opt(delimited(
+                        helpers::ws(opt(tag("..."))),
                         // param names are optional in define function
                         helpers::ws(literal::identifier),
                         helpers::ws(tag(":")),
                     )),
                     helpers::ws(literal::identifier),
-                )),
+                    opt(delimited(
+                        helpers::ws(tag("[")),
+                        helpers::ws(literal::number),
+                        helpers::ws(tag("]")),
+                    )),
+                ))),
             ),
             helpers::ws(tag(")")),
         ),
         |args| {
             args.into_iter()
-                .map(|(span, (name, _type))| FunctionParameter {
+                .map(|(span, (name, _type, size))| FunctionParameter {
                     name,
                     _type,
+                    size,
                     token: Token::from(span, SyntaxKind::LocalVariable),
                 })
                 .collect()
@@ -347,6 +354,7 @@ end"#,
                         len: 3,
                         syntax_kind: SyntaxKind::Identifier
                     },
+                    size: None,
                     token: Token {
                         start: 14,
                         len: 6,
@@ -398,6 +406,7 @@ end"#,
                             len: 3,
                             syntax_kind: SyntaxKind::Identifier
                         },
+                        size: None,
                         token: Token {
                             start: 14,
                             len: 6,
@@ -415,6 +424,7 @@ end"#,
                             len: 6,
                             syntax_kind: SyntaxKind::Identifier
                         },
+                        size: None,
                         token: Token {
                             start: 22,
                             len: 9,
@@ -469,6 +479,7 @@ end"#,
                             len: 3,
                             syntax_kind: SyntaxKind::Identifier
                         },
+                        size: None,
                         token: Token {
                             start: 14,
                             len: 6,
@@ -486,6 +497,7 @@ end"#,
                             len: 6,
                             syntax_kind: SyntaxKind::Identifier
                         },
+                        size: None,
                         token: Token {
                             start: 22,
                             len: 9,

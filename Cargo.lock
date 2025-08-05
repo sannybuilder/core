@@ -421,6 +421,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gta-ide-parser"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9858affd82e625592bed1089da5a8acaab4240a11fff78efc1cd2c89d99dc58"
+dependencies = [
+ "nom",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -691,9 +700,9 @@ checksum = "a3e378b66a060d48947b590737b30a1be76706c8dd7b8ba0f2fe3989c68a853f"
 
 [[package]]
 name = "memchr"
-version = "2.3.4"
+version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ee1c47aaa256ecabcaea351eae4a9b01ef39ed810004e298d2511ed284b1525"
+checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 
 [[package]]
 name = "minimal-lexical"
@@ -949,13 +958,14 @@ dependencies = [
 
 [[package]]
 name = "sanny_builder_core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "anyhow",
  "base64",
  "cached",
  "const_format",
  "ctor",
+ "gta-ide-parser",
  "hotwatch",
  "lazy_static",
  "lexical-core",
