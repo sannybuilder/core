@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_child" id="test_grandchild" title="Test Grandchild Mode" game="sa">
+    <!-- Add unique field for grandchild -->
+    <missions>@sb:\data\grandchild\missions.txt</missions>
+    <!-- Override data path -->
+    <data>@sb:\data\grandchild\</data>
+</mode>

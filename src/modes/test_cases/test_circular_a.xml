@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_circular_b" id="test_circular_a" title="Circular A" game="sa">
+    <data>@sb:\data\circular_a\</data>
+</mode>
