@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
-use clap::{Parser, ValueEnum};
-use gxt_parser::{GxtConfig, GxtParser, TextEncoding};
+use clap::Parser;
+use gxt_parser::GxtParser;
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -13,30 +13,16 @@ macro_rules! write_stdout {
     };
 }
 
-/// Text encoding types
-#[derive(Debug, Clone, Copy, ValueEnum)]
-enum Encoding {
-    /// UTF-8 encoding
-    Utf8,
-    /// UTF-16 LE encoding
-    Utf16,
-}
-
 /// GXT file parser and viewer
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 #[command(after_help = "EXAMPLES:
     gxt american.gxt                        # List all entries (auto-detect format)
     gxt american.gxt --key INTRO            # Lookup the INTRO key
-    gxt american.gxt -k INTRO               # Same as above (short form)
-    gxt mobile.gxt --encoding utf16         # Parse SA mobile file with UTF-16")]
+    gxt american.gxt -k INTRO               # Same as above (short form)")]
 struct Args {
     /// Path to the GXT file to parse
     gxt_file: String,
-
-    /// Specify the text encoding (defaults: UTF-16 for III/VC, UTF-8 for SA)
-    #[arg(short, long, value_enum)]
-    encoding: Option<Encoding>,
 
     /// Lookup a specific key instead of listing all entries
     #[arg(short, long)]
@@ -52,25 +38,13 @@ fn main() -> Result<()> {
         bail!("File '{}' does not exist", file_path);
     }
 
-    let encoding = args.encoding.unwrap_or_else(|| Encoding::Utf16);
+    // load the GXT file (format and encoding will be auto-detected)
+    let mut parser = GxtParser::new();
+    parser.load_file(file_path)?;
 
-    // Load the GXT file based on format and encoding
-    let config = match encoding {
-        Encoding::Utf16 => GxtConfig {
-            encoding: TextEncoding::Utf16,
-            ..Default::default()
-        },
-        Encoding::Utf8 => GxtConfig {
-            encoding: TextEncoding::Utf8,
-            ..Default::default()
-        },
-    };
-    let mut parser = GxtParser::new(config);
-    parser.load(file_path)?;
-
-    // Handle key lookup
+    // handle key lookup
     if let Some(key) = args.key {
-        // Lookup specific key - only print the value
+        // lookup specific key - only print the value
         if let Some(value) = parser.get(&key) {
             write_stdout!("{}", value);
         } else {
@@ -78,16 +52,8 @@ fn main() -> Result<()> {
             std::process::exit(1);
         }
     } else {
-        // Display all entries
-        let encoding_str = match encoding {
-            Encoding::Utf8 => "UTF-8",
-            Encoding::Utf16 => "UTF-16",
-        };
-        write_stdout!(
-            "Successfully loaded GXT file: {} (Encoding: {})",
-            file_path,
-            encoding_str
-        );
+        // display all entries
+        write_stdout!("Successfully loaded GXT file: {}", file_path);
         write_stdout!("Total entries: {}", parser.len());
         write_stdout!();
 

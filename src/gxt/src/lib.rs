@@ -27,41 +27,7 @@ fn read_wide_string<R: Read>(reader: &mut R) -> Result<String> {
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .collect();
 
-    Ok(String::from_utf16_lossy(&utf16_values))
-}
-
-/// Common trait for GXT text parsers
-pub trait GxtText {
-    /// Get a text value by its key
-    fn get(&self, key: &str) -> Option<String>;
-
-    /// Get all keys
-    fn keys(&self) -> Vec<String>;
-
-    /// Get the number of entries
-    fn len(&self) -> usize;
-
-    /// Check if empty
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-}
-
-/// Represents a table entry in GXT VC/SA formats
-#[derive(Debug, Clone)]
-struct TableEntry {
-    /// 8-byte table name
-    name: [u8; 8],
-    /// Offset to the table's TKEY section
-    offset: u32,
-}
-
-impl TableEntry {
-    /// Get the table name as a string (null-terminated)
-    fn name_as_string(&self) -> String {
-        let end = self.name.iter().position(|&b| b == 0).unwrap_or(8);
-        String::from_utf8_lossy(&self.name[..end]).to_string()
-    }
+    String::from_utf16(&utf16_values).map_err(|e| anyhow::anyhow!("Invalid UTF-16: {}", e))
 }
 
 /// Represents different key types used in GXT formats
@@ -81,15 +47,7 @@ impl GxtKey {
                 let end = bytes.iter().position(|&b| b == 0).unwrap_or(8);
                 String::from_utf8_lossy(&bytes[..end]).to_string()
             }
-            GxtKey::Hash(hash) => format!("{:08x}", hash),
-        }
-    }
-
-    /// Convert to uppercase string for VC-style lookup
-    fn to_uppercase_string(&self) -> String {
-        match self {
-            GxtKey::Text(_) => self.to_string().to_uppercase(),
-            GxtKey::Hash(hash) => format!("{:08x}", hash),
+            GxtKey::Hash(hash) => format!("{:08X}", hash),
         }
     }
 }
@@ -112,73 +70,40 @@ pub enum TextEncoding {
     Utf16,
 }
 
-/// Configuration for GXT format parsing
-#[derive(Debug, Clone, Copy)]
-pub struct GxtConfig {
-    /// Whether keys are hashed (true) or text-based (false)
-    pub is_hashed: bool,
-    /// Text encoding for string data
-    pub encoding: TextEncoding,
-    /// Whether the format supports multiple tables (true) or single table (false)
-    pub is_multi_table: bool,
-    /// Whether the format has an 8-byte header that should be skipped (San Andreas only)
-    pub has_header: bool,
-}
-
-impl Default for GxtConfig {
-    fn default() -> Self {
-        Self {
-            is_hashed: false,
-            encoding: TextEncoding::Utf16,
-            is_multi_table: false,
-            has_header: false,
-        }
-    }
-}
+// GXT format properties are now part of the parser and auto-detected during load
 
 /// Unified GXT parser that handles all format variations
 ///
 /// # Examples
 ///
 /// ```no_run
-/// use gxt_parser::{GxtParser, GxtConfig, TextEncoding};
+/// use gxt_parser::GxtParser;
 ///
-/// // Create a parser with a custom configuration
-/// let config = GxtConfig {
-///     is_hashed: false,        // Text-based keys
-///     encoding: TextEncoding::Utf16,  // UTF-16 encoding
-///     is_multi_table: true,    // Multiple tables support
-///     has_header: false,       // No header to skip
-/// };
-///
-/// let mut parser = GxtParser::new(config);
-///
-/// // Or use a predefined configuration
-/// let mut parser_vc = GxtParser::new(GxtConfig::default());
-/// let mut parser_sa = GxtParser::new(GxtConfig{
-///     encoding: TextEncoding::Utf8,
-///     ..Default::default()
-/// });
+/// // Create a new parser (format and encoding will be auto-detected on load)
+/// let mut parser = GxtParser::new();
 /// ```
 pub struct GxtParser {
     /// Map of keys to their text values (for text-based keys)
     entries: HashMap<String, String>,
     /// Map of hash values to text (for hash-based keys)
     hash_entries: HashMap<u32, String>,
-    /// Tables for debugging
-    tables: HashMap<String, Vec<String>>,
-    /// Configuration for this parser
-    config: GxtConfig,
+    /// Whether keys are hashed (true) or text-based (false)
+    is_hashed: bool,
+    /// Text encoding for string data
+    encoding: TextEncoding,
+    /// Whether the format supports multiple tables (true) or single table (false)
+    is_multi_table: bool,
 }
 
 impl GxtParser {
-    /// Create a new GXT parser with the specified configuration
-    pub fn new(config: GxtConfig) -> Self {
+    /// Create a new GXT parser (properties will be auto-detected on load)
+    pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
             hash_entries: HashMap::new(),
-            tables: HashMap::new(),
-            config,
+            encoding: TextEncoding::Utf16,
+            is_hashed: false,
+            is_multi_table: false,
         }
     }
 
@@ -190,46 +115,42 @@ impl GxtParser {
     }
 
     /// Load a GXT file from the given path
-    pub fn load<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+    pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let path = path.as_ref();
         let mut file = File::open(path)
             .with_context(|| format!("Failed to open GXT file: {}", path.display()))?;
-        self.load_from_reader(&mut file)
+        self.read(&mut file)
     }
 
-    /// Load GXT data from a reader
-    pub fn load_from_reader<R: Read + Seek>(&mut self, reader: &mut R) -> Result<()> {
-        self.load_format(reader)
-    }
-
-    /// Unified method to load GXT data based on config
-    fn load_format<R: Read + Seek>(&mut self, reader: &mut R) -> Result<()> {
+    fn read<R: Read + Seek>(&mut self, reader: &mut R) -> Result<()> {
         let mut section_name = [0u8; 4];
         reader.read_exact(&mut section_name)?;
         match &section_name {
             b"TKEY" => {
-                self.config.is_multi_table = false;
-                self.config.has_header = false;
-                self.config.is_hashed = false;
+                self.is_multi_table = false;
+                self.is_hashed = false;
+                self.encoding = TextEncoding::Utf16;
+                reader.rewind()?;
             }
             b"TABL" => {
-                self.config.is_multi_table = true;
-                self.config.has_header = false;
-                self.config.is_hashed = false;
+                self.is_multi_table = true;
+                self.is_hashed = false;
+                self.encoding = TextEncoding::Utf16;
+                reader.rewind()?;
             }
             _ => {
-                self.config.has_header = true;
-                self.config.is_hashed = true;
-                self.config.is_multi_table = true;
-            }
-        }
-        reader.rewind()?;
+                self.is_hashed = true;
+                self.is_multi_table = true;
+                reader.seek(SeekFrom::Start(2))?;
 
-        // Skip header if present (4 bytes)
-        if self.config.has_header {
-            reader
-                .seek(SeekFrom::Start(4))
-                .context("Failed to skip header")?;
+                // read bits per character
+                let encoding = reader.read_u16::<LittleEndian>()?;
+                match encoding {
+                    16 => self.encoding = TextEncoding::Utf16,
+                    8 => self.encoding = TextEncoding::Utf8,
+                    _ => bail!("Invalid encoding: {}", encoding),
+                }
+            }
         }
 
         fn expect_tag<R: Read + Seek>(reader: &mut R, tag: &[u8]) -> Result<()> {
@@ -247,13 +168,13 @@ impl GxtParser {
             Ok(())
         }
 
-        // Handle multi-table formats (Vice City and San Andreas)
-        let table_entries = if self.config.is_multi_table {
-            // Read TABL section
+        // handle multi-table formats (Vice City and San Andreas)
+        let table_entries = if self.is_multi_table {
+            // read TABL section
             let tabl_size = {
                 expect_tag(reader, b"TABL")?;
 
-                // Read section size
+                // read section size
                 let section_size = reader
                     .read_i32::<LittleEndian>()
                     .context("Failed to read TABL section size")?;
@@ -270,90 +191,71 @@ impl GxtParser {
 
             let num_tables = tabl_size / 12;
 
-            // Read all table entries
-            let mut table_entries = Vec::with_capacity(num_tables as usize);
+            // process each table entry immediately
+            let mut table_offsets: Vec<u32> = Vec::with_capacity(num_tables as usize);
             for i in 0..num_tables {
-                let mut name = [0u8; 8];
-                reader
-                    .read_exact(&mut name)
-                    .with_context(|| format!("Failed to read name for table {}", i))?;
+                // skip table name
+                reader.seek(SeekFrom::Current(8))?;
                 let offset = reader
                     .read_u32::<LittleEndian>()
                     .with_context(|| format!("Failed to read offset for table {}", i))?;
 
-                table_entries.push(TableEntry { name, offset });
+                table_offsets.push(offset);
             }
-            table_entries
+            table_offsets
         } else {
-            let mut table_entries = Vec::with_capacity(1);
-            table_entries.push(TableEntry {
-                name: [0u8; 8],
-                offset: 0,
-            });
-            table_entries
+            // single table: offset 0 (no extra header)
+            vec![0u32]
         };
 
-        // Process each table
-        for (table_idx, table) in table_entries.iter().enumerate() {
-            let table_name = table.name_as_string();
-            let mut table_keys = Vec::new();
-
-            // Seek to the table's data (only for multi-table formats)
-            if self.config.is_multi_table {
-                let seek_pos = if table_idx == 0 {
-                    table.offset
+        // read each table
+        for (idx, off) in table_entries.iter().enumerate() {
+            if self.is_multi_table {
+                let seek_pos = if idx == 0 {
+                    *off as u64
                 } else {
-                    table.offset + 8
+                    (*off + 8) as u64
                 };
-
                 reader
-                    .seek(SeekFrom::Start(seek_pos as u64))
-                    .with_context(|| {
-                        format!("Failed to seek to table at offset {}", table.offset)
-                    })?;
+                    .seek(SeekFrom::Start(seek_pos))
+                    .with_context(|| format!("Failed to seek to table at offset {}", off))?;
             }
 
-            // Read TKEY section
+            // read TKEY section
             expect_tag(reader, b"TKEY")?;
 
-            // Read TKEY section size
+            // read TKEY section size
             let tkey_size = reader
                 .read_u32::<LittleEndian>()
                 .context("Failed to read TKEY section size")?;
 
-            // Validate TKEY size based on format
-            let key_record_size = if self.config.is_hashed { 8 } else { 12 };
+            // validate TKEY size
+            let key_record_size = if self.is_hashed { 8 } else { 12 };
             if tkey_size % key_record_size != 0 {
                 bail!("Invalid TKEY section size: {}", tkey_size);
             }
 
             let num_keys = tkey_size / key_record_size;
 
-            // Read all key records
+            // read all key records
             let mut keys = Vec::with_capacity(num_keys as usize);
             for i in 0..num_keys {
                 let offset = reader
                     .read_u32::<LittleEndian>()
                     .with_context(|| format!("Failed to read offset for key {}", i))?;
-                let key_entry = if self.config.is_hashed {
-                    // SA format: 4 bytes offset, 4 bytes hash
+                let key_entry = if self.is_hashed {
                     let hash = reader
                         .read_u32::<LittleEndian>()
                         .with_context(|| format!("Failed to read hash for key {}", i))?;
-
-                    table_keys.push(format!("{:08x}", hash));
                     GxtKeyEntry {
                         offset,
                         key: GxtKey::Hash(hash),
                     }
                 } else {
-                    // VC format: 4 bytes offset, 8 bytes name
                     let mut name = [0u8; 8];
                     reader
                         .read_exact(&mut name)
                         .with_context(|| format!("Failed to read name for key {}", i))?;
-
-                    table_keys.push(GxtKey::Text(name).to_string());
                     GxtKeyEntry {
                         offset,
                         key: GxtKey::Text(name),
@@ -362,35 +264,33 @@ impl GxtParser {
                 keys.push(key_entry);
             }
 
-            // Read TDAT section
+            // read TDAT section
             expect_tag(reader, b"TDAT")?;
 
-            // Read TDAT section size
+            // read TDAT section size
             let tdat_size = reader
                 .read_u32::<LittleEndian>()
                 .context("Failed to read TDAT section size")?;
 
-            // Process string data
+            // read string data
             let mut table_strings = vec![0u8; tdat_size as usize];
             reader
                 .read_exact(&mut table_strings)
                 .context("Failed to read string data")?;
 
-            // Process each key and extract its string
+            // process each key and extract its string
             for key_entry in &keys {
                 let offset = key_entry.offset as usize;
                 if offset >= table_strings.len() {
                     continue;
                 }
 
-                let text = match self.config.encoding {
+                let text = match self.encoding {
                     TextEncoding::Utf16 => {
-                        // Read UTF-16 string
                         let mut cursor = Cursor::new(&table_strings[offset..]);
                         read_wide_string(&mut cursor).ok()
                     }
                     TextEncoding::Utf8 => {
-                        // Read UTF-8/ASCII string
                         let end = table_strings[offset..]
                             .iter()
                             .position(|&b| b == 0)
@@ -402,63 +302,48 @@ impl GxtParser {
                 };
 
                 if let Some(text) = text {
-                    if self.config.is_hashed {
+                    if self.is_hashed {
                         if let GxtKey::Hash(hash) = key_entry.key {
                             self.hash_entries.insert(hash, text);
                         }
                     } else {
+                        // store text keys in uppercase for case-insensitive lookup
                         self.entries
-                            .insert(key_entry.key.to_uppercase_string(), text);
+                            .insert(key_entry.key.to_string().to_uppercase(), text);
                     }
                 }
             }
-
-            self.tables.insert(table_name, table_keys);
         }
         Ok(())
     }
 
     /// Get a text value by its key
     pub fn get(&self, key: &str) -> Option<String> {
-        if self.config.is_hashed {
-            // First try to parse as a hex hash value (e.g., "15d4d373")
+        if self.is_hashed {
+            // try to parse as a hex hash value (e.g., "15d4d373")
             if let Ok(hash) = u32::from_str_radix(key, 16) {
                 if let Some(value) = self.hash_entries.get(&hash) {
                     return Some(value.clone());
                 }
             }
-            // Otherwise try as a regular key name (will be hashed)
+            // try as a regular key name (will be hashed)
             let hash = Self::calculate_hash(key);
             if let Some(value) = self.hash_entries.get(&hash) {
                 return Some(value.clone());
             }
             None
         } else {
-            // Text-based lookup (case-insensitive)
+            // text-based lookup (case-insensitive)
             self.entries.get(&key.to_uppercase()).cloned()
-        }
-    }
-
-    /// Get a text value by its key string (will be hashed with JAMCRC32 for SA format)
-    pub fn get_by_key(&self, key: &str) -> Option<String> {
-        self.get(key)
-    }
-
-    /// Get all known hashes (for SA format)
-    pub fn hashes(&self) -> Vec<u32> {
-        if self.config.is_hashed {
-            self.hash_entries.keys().copied().collect()
-        } else {
-            Vec::new()
         }
     }
 
     /// Get all keys
     pub fn keys(&self) -> Vec<String> {
-        if self.config.is_hashed {
+        if self.is_hashed {
             self.hash_entries
                 .keys()
-                .map(|&hash| format!("{:08x}", hash))
+                .map(|&hash| format!("{:08X}", hash))
                 .collect()
         } else {
             self.entries.keys().cloned().collect()
@@ -467,7 +352,7 @@ impl GxtParser {
 
     /// Get the number of entries
     pub fn len(&self) -> usize {
-        if self.config.is_hashed {
+        if self.is_hashed {
             self.hash_entries.len()
         } else {
             self.entries.len()
@@ -477,34 +362,6 @@ impl GxtParser {
     /// Check if empty
     pub fn is_empty(&self) -> bool {
         self.len() == 0
-    }
-
-    /// Get table names
-    pub fn table_names(&self) -> Vec<String> {
-        self.tables.keys().cloned().collect()
-    }
-
-    /// Get keys for a specific table
-    pub fn table_keys(&self, table_name: &str) -> Option<&Vec<String>> {
-        self.tables.get(table_name)
-    }
-}
-
-impl GxtText for GxtParser {
-    fn get(&self, key: &str) -> Option<String> {
-        self.get(key)
-    }
-
-    fn keys(&self) -> Vec<String> {
-        self.keys()
-    }
-
-    fn len(&self) -> usize {
-        self.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.is_empty()
     }
 }
 
@@ -536,9 +393,9 @@ mod tests {
         data.extend_from_slice(&0i32.to_le_bytes()); // section size = 0
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_ok());
+        assert!(parser.read(&mut cursor).is_ok());
         assert_eq!(parser.len(), 0);
         assert!(parser.is_empty());
     }
@@ -563,9 +420,9 @@ mod tests {
         data.extend_from_slice(&[b'H', 0, b'e', 0, b'l', 0, b'l', 0, b'o', 0, 0, 0]);
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_ok());
+        assert!(parser.read(&mut cursor).is_ok());
         assert_eq!(parser.len(), 1);
 
         // Test case-insensitive lookup
@@ -579,9 +436,9 @@ mod tests {
     fn test_invalid_header_iii() {
         let data = b"INVALID_HEADER";
         let mut cursor = Cursor::new(data.to_vec());
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_err());
+        assert!(parser.read(&mut cursor).is_err());
     }
 
     #[test]
@@ -592,9 +449,9 @@ mod tests {
         data.extend_from_slice(&0i32.to_le_bytes()); // section size = 0
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_ok());
+        assert!(parser.read(&mut cursor).is_ok());
         assert_eq!(parser.len(), 0);
         assert!(parser.is_empty());
     }
@@ -603,18 +460,9 @@ mod tests {
     fn test_invalid_header_vc() {
         let data = b"INVALID_HEADER";
         let mut cursor = Cursor::new(data.to_vec());
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_err());
-    }
-
-    #[test]
-    fn test_table_entry_name() {
-        let entry = TableEntry {
-            name: [b'M', b'A', b'I', b'N', 0, 0, 0, 0],
-            offset: 100,
-        };
-        assert_eq!(entry.name_as_string(), "MAIN");
+        assert!(parser.read(&mut cursor).is_err());
     }
 
     #[test]
@@ -625,9 +473,9 @@ mod tests {
         data.extend_from_slice(&13i32.to_le_bytes()); // Invalid: not divisible by 12
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        let result = parser.load_from_reader(&mut cursor);
+        let result = parser.read(&mut cursor);
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -663,9 +511,9 @@ mod tests {
         data.extend_from_slice(&[b'W', 0, b'o', 0, b'r', 0, b'l', 0, b'd', 0, 0, 0]);
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_ok());
+        assert!(parser.read(&mut cursor).is_ok());
         assert_eq!(parser.len(), 1);
 
         // Test case-insensitive lookup for VC format
@@ -690,27 +538,11 @@ mod tests {
     }
 
     #[test]
-    fn test_custom_config() {
-        // Test that we can create custom configurations
-        let config = GxtConfig {
-            is_hashed: false,
-            encoding: TextEncoding::Utf16,
-            is_multi_table: false,
-            has_header: false,
-        };
-
-        let parser = GxtParser::new(config);
+    fn test_new_parser_is_empty() {
+        // New parser should start empty before loading
+        let parser = GxtParser::new();
         assert!(parser.is_empty());
-
-        // Test a different custom config
-        let config2 = GxtConfig {
-            is_hashed: true,
-            encoding: TextEncoding::Utf8,
-            is_multi_table: false, // Single table with hashes (hypothetical format)
-            has_header: false,
-        };
-
-        let parser2 = GxtParser::new(config2);
+        let parser2 = GxtParser::new();
         assert!(parser2.is_empty());
     }
 
@@ -735,12 +567,12 @@ mod tests {
         data.extend_from_slice(&[b'G', 0, b'r', 0, b'e', 0, b'e', 0, b't', 0, 0, 0]);
 
         let mut cursor = Cursor::new(data);
-        let mut parser = GxtParser::new(GxtConfig::default());
+        let mut parser = GxtParser::new();
 
-        assert!(parser.load_from_reader(&mut cursor).is_ok());
+        assert!(parser.read(&mut cursor).is_ok());
 
         // Test through the trait interface
-        let gxt: &dyn GxtText = &parser;
+        let gxt = &parser;
         assert_eq!(gxt.get("HELLO"), Some("Greet".to_string()));
         assert_eq!(gxt.get("hello"), Some("Greet".to_string()));
         assert_eq!(gxt.get("Hello"), Some("Greet".to_string()));
