@@ -35,3 +35,7 @@ zip = { git  = "https://github.com/x87/zip.git" }
 const_format = "0.2.32"
 cached = "0.50.0"
 gta-ide-parser = "0.0.4"
+byteorder = "1.5"
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1.4"
+encoding_rs = "0.8"

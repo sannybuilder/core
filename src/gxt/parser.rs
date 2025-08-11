@@ -107,13 +107,6 @@ impl GxtParser {
         }
     }
 
-    /// Calculate JAMCRC32 hash for a key string (for SA format)
-    pub fn calculate_hash(key: &str) -> u32 {
-        let mut hasher = Hasher::new();
-        hasher.update(key.to_uppercase().as_bytes());
-        !hasher.finalize() // JAMCRC32 = ~CRC32
-    }
-
     /// Load a GXT file from the given path
     pub fn load_file<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let path = path.as_ref();
