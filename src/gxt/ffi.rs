@@ -1,4 +1,6 @@
+use std::ffi::CString;
 use crate::common_ffi::*;
+use super::parser::GxtParser;
 
 #[no_mangle]
 pub extern "C" fn gxt_new() -> *mut GxtParser {
@@ -14,8 +16,7 @@ pub unsafe extern "C" fn gxt_free(p: *mut GxtParser) {
 pub unsafe extern "C" fn gxt_load_file(p: *mut GxtParser, path: PChar) -> bool {
     boolclosure!({
         let path = pchar_to_str(path)?;
-        (*p).load_file(path)?;
-        Some(())
+        (*p).load_file(path).ok()
     })
 }
 
