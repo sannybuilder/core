@@ -18,6 +18,8 @@ pub mod source_map;
 pub mod preprocessor;
 pub mod sanny_update;
 pub mod ide;
+pub mod gxt;
+pub mod modes;
 
 #[ctor]
 fn main() {

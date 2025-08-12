@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_base" id="test_child" title="Test Child Mode" game="sa">
+    <!-- Override some fields from parent -->
+    <compiler>@sb:\compiler\child.exe</compiler>
+    <constants>@sb:\data\child\constants.txt</constants>
+    <!-- Add new classes entry -->
+    <classes>@sb:\data\child\extra_classes.db</classes>
+    <!-- Override text format -->
+    <text format="sa">@game:\text\child.json</text>
+    <!-- Add new template -->
+    <templates type="custom">@sb:\templates\child_custom.txt</templates>
+</mode>

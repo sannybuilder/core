@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_circular_a" id="test_circular_b" title="Circular B" game="sa">
+    <constants>@sb:\data\circular_b\constants.txt</constants>
+</mode>

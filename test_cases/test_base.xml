@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode id="test_base" title="Test Base Mode" game="sa" type="default">
+    <data>@sb:\data\base\</data>
+    <library autoupdate="yes">@sb:\data\base\library.json</library>
+    <classes autoupdate="yes">@sb:\data\base\classes.db</classes>
+    <enums autoupdate="no">@sb:\data\base\enums.txt</enums>
+    <constants>@sb:\data\base\constants.txt</constants>
+    <keywords>@sb:\data\base\keywords.txt</keywords>
+    <variables>@game:\variables.ini</variables>
+    <text format="sa">@game:\text\base.txt</text>
+    <ide base="@game:\">@game:\data\base.dat</ide>
+    <templates type="default">@sb:\templates\base.txt</templates>
+    <copy-directory type="main">@game:\data\main</copy-directory>
+</mode>
