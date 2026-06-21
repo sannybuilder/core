@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_circular_e" id="test_circular_d" title="Circular D" game="sa">
+    <compiler>@sb:\compiler\d.exe</compiler>
+</mode>

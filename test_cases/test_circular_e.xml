@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mode extends="test_circular_c" id="test_circular_e" title="Circular E" game="sa">
+    <keywords>@sb:\data\circular_e\keywords.txt</keywords>
+</mode>

@@ -185,7 +185,7 @@ fn get_download_link(channel: Channel, local_version: &str) -> Option<String> {
             Ok(manifest) => {
                 for i in manifest.info {
                     // fallback url
-                    if (i.min.eq("*")) {
+                    if i.min.eq("*") {
                         return Some(i.url);
                     }
                     let min = version_compare::Version::from(&i.min);
