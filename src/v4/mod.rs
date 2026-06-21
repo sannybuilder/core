@@ -3,19 +3,7 @@ use crate::{
     namespaces::namespaces::Namespaces,
 };
 
-pub mod ffi;
 pub mod helpers;
-pub mod transform;
-
-pub fn transform(
-    expr: &str,
-    ns: &Namespaces,
-    legacy_ini: &OpcodeTable,
-    const_lookup: &DictStrByStr,
-) -> Option<String> {
-    let body = crate::parser::parse(expr).ok()?.1;
-    transform::try_tranform(&body, expr, ns, legacy_ini, const_lookup)
-}
 
 #[cfg(test)]
 mod tests {
