@@ -73,15 +73,6 @@ pub enum TextEncoding {
 // GXT format properties are now part of the parser and auto-detected during load
 
 /// Unified GXT parser that handles all format variations
-///
-/// # Examples
-///
-/// ```no_run
-/// use gxt_parser::GxtParser;
-///
-/// // Create a new parser (format and encoding will be auto-detected on load)
-/// let mut parser = GxtParser::new();
-/// ```
 pub struct GxtParser {
     /// Map of keys to their text values (for text-based keys)
     entries: HashMap<String, String>,
